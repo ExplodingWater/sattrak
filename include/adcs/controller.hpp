@@ -33,7 +33,7 @@ public:
     [[nodiscard]] math::Vec3 computeControlTorque(
         const Quaternion& qEstimated,
         const math::Vec3& omegaEstimated,
-        const Quaternion& qTarget) const 
+        const Quaternion& qTarget) const
     {
         // Quaternion error: q_err = qTarget.inverse() * qEstimated
         Quaternion qErr = qTarget.inverse() * qEstimated;

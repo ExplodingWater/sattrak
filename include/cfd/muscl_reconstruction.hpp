@@ -46,7 +46,7 @@ inline double evaluateLimiter(double r, LimiterType type) {
 inline void reconstructInterface1D(
     double u_im1, double u_i, double u_ip1, double u_ip2,
     LimiterType type,
-    double& uL_half, double& uR_half) 
+    double& uL_half, double& uR_half)
 {
     if (type == LimiterType::FirstOrder) {
         uL_half = u_i;
@@ -85,7 +85,7 @@ inline void reconstructPrimitiveInterface(
     const PrimitiveState& p_ip2,
     LimiterType type,
     PrimitiveState& pL,
-    PrimitiveState& pR) 
+    PrimitiveState& pR)
 {
     reconstructInterface1D(p_im1.rho, p_i.rho, p_ip1.rho, p_ip2.rho, type, pL.rho, pR.rho);
     reconstructInterface1D(p_im1.u,   p_i.u,   p_ip1.u,   p_ip2.u,   type, pL.u,   pR.u);

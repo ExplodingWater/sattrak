@@ -23,7 +23,7 @@ struct MEKFConfig {
 class MEKF {
 public:
     explicit MEKF(const MEKFConfig& config = {})
-        : config_(config) 
+        : config_(config)
     {
         reset();
     }
@@ -99,7 +99,7 @@ public:
     void updateVector(
         const math::Vec3& yMeas,
         const math::Vec3& rInertial,
-        double noiseStdDev) 
+        double noiseStdDev)
     {
         // Predicted measurement in Body frame
         const math::Vec3 yHat = q_.rotate(rInertial);

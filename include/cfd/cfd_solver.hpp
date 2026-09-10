@@ -294,14 +294,14 @@ public:
             const double res = residualNorm_;
 
             if (verbose && (iter % 100 == 0 || iter == 1 || iter == config_.maxIterations)) {
-                std::cout << "  Iter " << std::setw(5) << iter 
-                          << " | Scaled steady residual: " << std::scientific << std::setprecision(4) << res 
+                std::cout << "  Iter " << std::setw(5) << iter
+                          << " | Scaled steady residual: " << std::scientific << std::setprecision(4) << res
                           << " | dt: " << computeTimeStep() * 1e6 << " us\n";
             }
 
             if (res < config_.convergenceTol && iter > 50) {
                 if (verbose) {
-                    std::cout << ">>> Converged to tolerance " << config_.convergenceTol 
+                    std::cout << ">>> Converged to tolerance " << config_.convergenceTol
                               << " at iteration " << iter << " <<<\n";
                 }
                 return true;

@@ -29,8 +29,7 @@ Location previews from Wikimedia Commons. Photos identify the area; they do not 
 ## London
 
 - File: `london.jpg`
-- Author: 
-Ilya Grigorik
+- Author: Ilya Grigorik
 - License: CC BY-SA 3.0
 - Source: https://commons.wikimedia.org/wiki/File:London_Skyline_%28125508655%29.jpeg
 - License link: https://creativecommons.org/licenses/by-sa/3.0

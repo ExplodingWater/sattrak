@@ -7,7 +7,7 @@ namespace aero::math {
 /**
  * @brief Classical 4th-order Runge-Kutta (RK4) integrator.
  * Solves dx/dt = f(t, x).
- * 
+ *
  * @tparam StateType Vector or container supporting +, *, and scalar multiplication.
  * @tparam DerivFunc Invocable with signature StateType(double t, const StateType& x)
  */

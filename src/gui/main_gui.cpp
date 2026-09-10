@@ -270,4 +270,3 @@ int main(int argc, char** argv) {
     std::cout << "[INFO] GUI session terminated cleanly.\n";
     return smokeFailed ? 1 : 0;
 }
-

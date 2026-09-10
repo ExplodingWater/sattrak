@@ -161,7 +161,7 @@ public:
     static StructuredGrid createCompressionRamp(
         size_t nx, size_t ny,
         double xMin, double xMax, double yMax,
-        double rampX, double thetaDeg) 
+        double rampX, double thetaDeg)
     {
         StructuredGrid grid(nx, ny);
         const double thetaRad = thetaDeg * constants::PI / 180.0;
@@ -189,7 +189,7 @@ public:
      */
     static StructuredGrid createCartesian(
         size_t nx, size_t ny,
-        double xMin, double xMax, double yMin, double yMax) 
+        double xMin, double xMax, double yMin, double yMax)
     {
         StructuredGrid grid(nx, ny);
         const double dx = (xMax - xMin) / static_cast<double>(nx);

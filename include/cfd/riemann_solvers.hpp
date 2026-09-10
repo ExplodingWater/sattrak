@@ -15,7 +15,7 @@ inline ConservativeState computeRusanovFlux(
     const ConservativeState& UR,
     double nx,
     double ny,
-    double gamma = constants::GAMMA_AIR) 
+    double gamma = constants::GAMMA_AIR)
 {
     const PrimitiveState pL = UL.toPrimitive(gamma);
     const PrimitiveState pR = UR.toPrimitive(gamma);
@@ -43,7 +43,7 @@ inline ConservativeState computeRoeFlux(
     const ConservativeState& UR,
     double nx,
     double ny,
-    double gamma = constants::GAMMA_AIR) 
+    double gamma = constants::GAMMA_AIR)
 {
     const PrimitiveState pL = UL.toPrimitive(gamma);
     const PrimitiveState pR = UR.toPrimitive(gamma);

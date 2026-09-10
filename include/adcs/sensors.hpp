@@ -69,7 +69,7 @@ public:
     math::Vec3 measureVector(
         const Quaternion& trueQ,
         const math::Vec3& rInertial,
-        const VectorSensorParameters& params) 
+        const VectorSensorParameters& params)
     {
         const math::Vec3 rBody = trueQ.rotate(rInertial);
         const math::Vec3 noise{

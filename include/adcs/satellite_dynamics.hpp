@@ -55,7 +55,7 @@ public:
         const math::Vec3& omega,
         const math::Vec3& hWheel,
         const math::Vec3& tauExt,
-        const math::Vec3& tauWheel) const 
+        const math::Vec3& tauWheel) const
     {
         const math::Vec3 totalMomentum = params_.inertia * omega + hWheel;
         const math::Vec3 gyroscopic = omega.cross(totalMomentum);
@@ -70,7 +70,7 @@ public:
         const SatelliteState& current,
         const math::Vec3& tauExt,
         const math::Vec3& tauWheelCmd,
-        double dt) const 
+        double dt) const
     {
         if (!std::isfinite(dt) || dt <= 0.0) {
             throw std::invalid_argument("Satellite timestep must be finite and positive");
