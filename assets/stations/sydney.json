@@ -1,0 +1,96 @@
+{
+  "file": "sydney.jpg",
+  "location": "Sydney",
+  "image_url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/53/Sydney_Opera_House_and_Harbour_Bridge_Dusk_%282%29_2019-06-21.jpg/330px-Sydney_Opera_House_and_Harbour_Bridge_Dusk_%282%29_2019-06-21.jpg",
+  "source_page": "https://commons.wikimedia.org/wiki/File:Sydney_Opera_House_and_Harbour_Bridge_Dusk_%282%29_2019-06-21.jpg",
+  "width": 330,
+  "height": 165,
+  "attribution": {
+    "DateTime": {
+      "value": "2019-09-18 06:59:28",
+      "source": "mediawiki-metadata",
+      "hidden": ""
+    },
+    "ObjectName": {
+      "value": "Sydney Opera House and Harbour Bridge Dusk (2) 2019-06-21",
+      "source": "mediawiki-metadata"
+    },
+    "CommonsMetadataExtension": {
+      "value": 1.2,
+      "source": "extension",
+      "hidden": ""
+    },
+    "Categories": {
+      "value": "Featured pictures on Wikipedia, Persian|Flickr images reviewed by FlickreviewR 2|Australia photographs taken on 2019-06-21|Files with coordinates missing SDC location of creation (34\u00b0 S, 151\u00b0 E)|Files with Assessments template missing SDC Commons no value quality assessment|Sydney Harbour Bridge at night|Sydney Opera House at night|Sydney Opera House from the east",
+      "source": "commons-categories",
+      "hidden": ""
+    },
+    "Assessments": {
+      "value": "",
+      "source": "commons-categories",
+      "hidden": ""
+    },
+    "GPSLatitude": {
+      "value": "-33.861339",
+      "source": "commons-desc-page"
+    },
+    "GPSLongitude": {
+      "value": "151.220858",
+      "source": "commons-desc-page"
+    },
+    "GPSMapDatum": {
+      "value": "WGS-84",
+      "source": "commons-desc-page",
+      "hidden": ""
+    },
+    "ImageDescription": {
+      "value": "J\u00f8rn Utzon's Sydney Opera House, and the Harbour Bridge, two of Sydney's most famous landmarks, taken at late dusk. The Sydney Opera House is one of the most iconic buildings built in the 20th century (1973) and is UNESCO's world heritage.",
+      "source": "commons-desc-page"
+    },
+    "DateTimeOriginal": {
+      "value": "2019-06-21 17:34",
+      "source": "commons-desc-page"
+    },
+    "Credit": {
+      "value": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.flickr.com/photos/blieusong/48631719198/\">Sydney's Landmarks 2</a>",
+      "source": "commons-desc-page"
+    },
+    "Artist": {
+      "value": "<a href=\"//commons.wikimedia.org/wiki/User:Benh\" title=\"User:Benh\">Benh LIEU SONG</a> (<a rel=\"nofollow\" class=\"external text\" href=\"https://www.flickr.com/people/75729488@N03\">Flickr</a>)",
+      "source": "commons-desc-page"
+    },
+    "LicenseShortName": {
+      "value": "CC BY-SA 4.0",
+      "source": "commons-desc-page",
+      "hidden": ""
+    },
+    "UsageTerms": {
+      "value": "Creative Commons Attribution-Share Alike 4.0",
+      "source": "commons-desc-page"
+    },
+    "AttributionRequired": {
+      "value": "true",
+      "source": "commons-desc-page",
+      "hidden": ""
+    },
+    "LicenseUrl": {
+      "value": "https://creativecommons.org/licenses/by-sa/4.0",
+      "source": "commons-desc-page"
+    },
+    "Copyrighted": {
+      "value": "True",
+      "source": "commons-desc-page",
+      "hidden": ""
+    },
+    "Restrictions": {
+      "value": "",
+      "source": "commons-desc-page",
+      "hidden": ""
+    },
+    "License": {
+      "value": "cc-by-sa-4.0",
+      "source": "commons-templates",
+      "hidden": ""
+    }
+  }
+}

@@ -1,0 +1,118 @@
+name: CI/CD Matrix
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.os }} (${{ matrix.compiler }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            compiler: gcc
+            cxx: g++-12
+          - os: ubuntu-latest
+            compiler: clang
+            cxx: clang++-15
+          - os: windows-latest
+            compiler: msvc
+            cxx: cl
+          - os: macos-latest
+            compiler: apple-clang
+            cxx: clang++
+
+    steps:
+    - name: Checkout Source Code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Set up CMake
+      uses: jwlawson/actions-setup-cmake@v2
+      with:
+        cmake-version: '3.28.x'
+
+    - name: Install Compilers (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        if [ "${{ matrix.compiler }}" = "gcc" ]; then
+          sudo apt-get install -y g++-12
+        elif [ "${{ matrix.compiler }}" = "clang" ]; then
+          sudo apt-get install -y clang-15
+        fi
+
+    - name: Configure CMake
+      run: >
+        cmake -B build -S .
+        -DCMAKE_BUILD_TYPE=Release
+        -DBUILD_GUI=OFF
+        ${{ runner.os == 'Linux' && format('-DCMAKE_CXX_COMPILER={0}', matrix.cxx) || '' }}
+
+    - name: Build All Targets (C++20)
+      run: cmake --build build --config Release --parallel
+
+    - name: Run CTest Verification Suite
+      run: ctest --test-dir build -C Release --output-on-failure
+
+    - name: Run Standalone Executable 1 (Satellite ADCS MEKF)
+      run: |
+        if [ "${{ runner.os }}" = "Windows" ]; then
+          ./build/Release/mekf_adcs.exe
+        else
+          ./build/mekf_adcs
+        fi
+      shell: bash
+
+    - name: Run Standalone Executable 2 (Supersonic CFD Solver)
+      run: |
+        if [ "${{ runner.os }}" = "Windows" ]; then
+          ./build/Release/supersonic_cfd.exe
+        else
+          ./build/supersonic_cfd
+        fi
+      shell: bash
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Test validation scripts
+      run: python tests/test_validation.py
+
+    - name: Validate measured CFD output
+      run: python scripts/plot_shock_validation.py supersonic_wedge_shock.vtk
+
+    - name: Upload Aerospace Simulation Datasets
+      uses: actions/upload-artifact@v4
+      with:
+        name: simulation-artifacts-${{ matrix.os }}-${{ matrix.compiler }}
+        path: |
+          telemetry_adcs.csv
+          supersonic_wedge_shock.vtk
+          data/
+
+  gui-build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install Linux OpenGL and X11 development libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+      - name: Configure GUI
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_GUI=ON -DGLFW_BUILD_WAYLAND=OFF
+      - name: Build GUI
+        run: cmake --build build --config Release --target ag --parallel

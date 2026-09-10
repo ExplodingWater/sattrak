@@ -1,0 +1,97 @@
+{
+  "file": "cape.jpg",
+  "location": "Cape Canaveral",
+  "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Cape_canaveral.jpg/330px-Cape_canaveral.jpg",
+  "source_page": "https://commons.wikimedia.org/wiki/File:Cape_canaveral.jpg",
+  "width": 330,
+  "height": 327,
+  "attribution": {
+    "DateTime": {
+      "value": "2009-03-21 19:35:13",
+      "source": "mediawiki-metadata",
+      "hidden": ""
+    },
+    "ObjectName": {
+      "value": "Cape canaveral",
+      "source": "mediawiki-metadata"
+    },
+    "CommonsMetadataExtension": {
+      "value": 1.2,
+      "source": "extension",
+      "hidden": ""
+    },
+    "Categories": {
+      "value": "1991 in Florida|Images with annotations|National Register of Historic Places with known IDs|Images with 10+ annotations|Photographs taken on 1991-08-07|Earth photography during STS-43|Satellite pictures of Cape Canaveral Space Force Station|Satellite pictures of Kennedy Space Center|PD NASA-AP|Files from NASA with known IDs",
+      "source": "commons-categories",
+      "hidden": ""
+    },
+    "Assessments": {
+      "value": "",
+      "source": "commons-categories",
+      "hidden": ""
+    },
+    "GPSLatitude": {
+      "value": "28.500000",
+      "source": "commons-desc-page"
+    },
+    "GPSLongitude": {
+      "value": "-80.500000",
+      "source": "commons-desc-page"
+    },
+    "GPSMapDatum": {
+      "value": "WGS-84",
+      "source": "commons-desc-page",
+      "hidden": ""
+    },
+    "ImageDescription": {
+      "value": "<a href=\"https://en.wikipedia.org/wiki/Cape_Canaveral,_Florida\" class=\"extiw\" title=\"en:Cape Canaveral, Florida\">Cape Canaveral, Florida</a> and the NASA <a href=\"https://en.wikipedia.org/wiki/Kennedy_Space_Center\" class=\"extiw\" title=\"en:Kennedy Space Center\">John F. Kennedy Space Center</a> are shown in this near-vertical photograph. Numerous launch pads line the <a href=\"https://en.wikipedia.org/wiki/Atlantic_Ocean\" class=\"extiw\" title=\"en:Atlantic Ocean\">Atlantic Ocean</a> coast near the center of the photograph. To the north of the multiple launch pads, the <a href=\"https://en.wikipedia.org/wiki/Shuttle_Landing_Facility\" class=\"extiw\" title=\"en:Shuttle Landing Facility\">Space Shuttle landing runway</a>, the Shuttle Assembly Area, and <a href=\"https://en.wikipedia.org/wiki/Kennedy_Space_Center_Launch_Complex_39\" class=\"extiw\" title=\"en:Kennedy Space Center Launch Complex 39\">Shuttle Launch Pads A and B</a> are visible. To the south of the multiple launch pads are <a href=\"https://en.wikipedia.org/wiki/Port_Canaveral\" class=\"extiw\" title=\"en:Port Canaveral\">Port Canaveral</a> and the city of <a href=\"https://en.wikipedia.org/wiki/Cocoa_Beach,_Florida\" class=\"extiw\" title=\"en:Cocoa Beach, Florida\">Cocoa Beach, Florida</a>. To the west of the space complex, five causeways span the <a href=\"https://en.wikipedia.org/wiki/Indian_River_(Florida)\" class=\"extiw\" title=\"en:Indian River (Florida)\">Indian</a> and <a href=\"https://en.wikipedia.org/wiki/Banana_River\" class=\"extiw\" title=\"en:Banana River\">Banana Rivers</a>. <a href=\"https://en.wikipedia.org/wiki/Interstate_Highway_95\" class=\"extiw\" title=\"en:Interstate Highway 95\">Interstate Highway 95</a> is the main artery traversing south to north just west of the Florida cities of <a href=\"https://en.wikipedia.org/wiki/Cocoa,_Florida\" class=\"extiw\" title=\"en:Cocoa, Florida\">Cocoa</a> and <a href=\"https://en.wikipedia.org/wiki/Titusville,_Florida\" class=\"extiw\" title=\"en:Titusville, Florida\">Titusville</a>.",
+      "source": "commons-desc-page"
+    },
+    "DateTimeOriginal": {
+      "value": "1991-08-07 12:57:42",
+      "source": "commons-desc-page"
+    },
+    "Credit": {
+      "value": "<a rel=\"nofollow\" class=\"external text\" data-mw-original-href=\"http://eol.jsc.nasa.gov/SearchPhotos/photo.pl?mission=STS043&amp;roll=84&amp;frame=31\" href=\"https://eol.jsc.nasa.gov/SearchPhotos/photo.pl?mission=STS043&amp;roll=84&amp;frame=31\">Gateway to Astronaut Photography of Earth</a> (<a rel=\"nofollow\" class=\"external text\" data-mw-original-href=\"http://eol.jsc.nasa.gov/DatabaseImages/EFS/highres/STS043/STS043-84-31.JPG\" href=\"https://eol.jsc.nasa.gov/DatabaseImages/EFS/highres/STS043/STS043-84-31.JPG\">image link</a>)",
+      "source": "commons-desc-page"
+    },
+    "Artist": {
+      "value": "NASA",
+      "source": "commons-desc-page"
+    },
+    "Permission": {
+      "value": "<i>This file is in the <b><a href=\"https://en.wikipedia.org/wiki/public_domain\" class=\"extiw\" title=\"w:public domain\">public domain</a></b> in the United States because it was created by the Image Science &amp; Analysis Laboratory, of the <a href=\"https://en.wikipedia.org/wiki/NASA\" class=\"extiw\" title=\"w:NASA\">NASA</a> Johnson Space Center. NASA copyright policy states that \"NASA material is not protected by copyright <b>unless noted</b>\". (<a rel=\"nofollow\" class=\"external text\" href=\"https://www.nasa.gov/multimedia/guidelines/index.html\">NASA media use guidelines</a> or <a rel=\"nofollow\" class=\"external text\" href=\"https://eol.jsc.nasa.gov/FAQ/\">Conditions of Use of Astronaut Photographs</a>).</i>\nPhoto source: <a rel=\"nofollow\" class=\"external text\" href=\"https://eol.jsc.nasa.gov/searchphotos/photo.pl?mission=STS043&amp;roll=84&amp;frame=31\">STS043-84-31</a><i>.</i>",
+      "source": "commons-desc-page",
+      "hidden": ""
+    },
+    "LicenseShortName": {
+      "value": "Public domain",
+      "source": "commons-desc-page",
+      "hidden": ""
+    },
+    "UsageTerms": {
+      "value": "Public domain",
+      "source": "commons-desc-page"
+    },
+    "AttributionRequired": {
+      "value": "false",
+      "source": "commons-desc-page",
+      "hidden": ""
+    },
+    "Copyrighted": {
+      "value": "False",
+      "source": "commons-desc-page",
+      "hidden": ""
+    },
+    "Restrictions": {
+      "value": "",
+      "source": "commons-desc-page",
+      "hidden": ""
+    },
+    "License": {
+      "value": "pd",
+      "source": "commons-templates",
+      "hidden": ""
+    }
+  }
+}

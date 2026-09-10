@@ -1,0 +1,96 @@
+{
+  "file": "tokyo.jpg",
+  "location": "Tokyo",
+  "image_url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b2/Skyscrapers_of_Shinjuku_2009_January.jpg/330px-Skyscrapers_of_Shinjuku_2009_January.jpg",
+  "source_page": "https://commons.wikimedia.org/wiki/File:Skyscrapers_of_Shinjuku_2009_January.jpg",
+  "width": 330,
+  "height": 176,
+  "attribution": {
+    "DateTime": {
+      "value": "2009-01-26 04:24:34",
+      "source": "mediawiki-metadata",
+      "hidden": ""
+    },
+    "ObjectName": {
+      "value": "Skyscrapers of Shinjuku 2009 January",
+      "source": "mediawiki-metadata"
+    },
+    "CommonsMetadataExtension": {
+      "value": 1.2,
+      "source": "extension",
+      "hidden": ""
+    },
+    "Categories": {
+      "value": "GFDL|Mode Gakuen Cocoon Tower|License migration redundant|Self-published work|Images with extracted images|FoP-Japan|Cityscapes in Tokyo|2009 in Shinjuku|Files with coordinates missing SDC location of creation|Photos taken by Morio/Cityscapes/Tokyo/Shinjuku|Views of skyscrapers in Nishi-Shinjuku and Mount Fuji from Bunkyo Civic Center",
+      "source": "commons-categories",
+      "hidden": ""
+    },
+    "Assessments": {
+      "value": "",
+      "source": "commons-categories",
+      "hidden": ""
+    },
+    "GPSLatitude": {
+      "value": "35.707900",
+      "source": "commons-desc-page"
+    },
+    "GPSLongitude": {
+      "value": "139.752177",
+      "source": "commons-desc-page"
+    },
+    "GPSMapDatum": {
+      "value": "WGS-84",
+      "source": "commons-desc-page",
+      "hidden": ""
+    },
+    "ImageDescription": {
+      "value": "View of Shinjuku skyscrapers and Mount Fuji as seen from the Bunkyo Civic Center in Tokyo",
+      "source": "commons-desc-page"
+    },
+    "DateTimeOriginal": {
+      "value": "2009-01-25",
+      "source": "commons-desc-page"
+    },
+    "Credit": {
+      "value": "<span class=\"int-own-work\" lang=\"en\">Own work</span>",
+      "source": "commons-desc-page"
+    },
+    "Artist": {
+      "value": "<a href=\"//commons.wikimedia.org/wiki/User:Morio\" title=\"User:Morio\">Morio</a>",
+      "source": "commons-desc-page"
+    },
+    "LicenseShortName": {
+      "value": "CC BY-SA 3.0",
+      "source": "commons-desc-page",
+      "hidden": ""
+    },
+    "UsageTerms": {
+      "value": "Creative Commons Attribution-Share Alike 3.0",
+      "source": "commons-desc-page"
+    },
+    "AttributionRequired": {
+      "value": "true",
+      "source": "commons-desc-page",
+      "hidden": ""
+    },
+    "LicenseUrl": {
+      "value": "http://creativecommons.org/licenses/by-sa/3.0/",
+      "source": "commons-desc-page"
+    },
+    "Copyrighted": {
+      "value": "True",
+      "source": "commons-desc-page",
+      "hidden": ""
+    },
+    "Restrictions": {
+      "value": "",
+      "source": "commons-desc-page",
+      "hidden": ""
+    },
+    "License": {
+      "value": "cc-by-sa-3.0",
+      "source": "commons-templates",
+      "hidden": ""
+    }
+  }
+}

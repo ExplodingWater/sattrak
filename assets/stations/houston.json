@@ -1,0 +1,83 @@
+{
+  "file": "houston.jpg",
+  "location": "Houston",
+  "image_url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a3/Texas_medical_center.jpg/330px-Texas_medical_center.jpg",
+  "source_page": "https://commons.wikimedia.org/wiki/File:Texas_medical_center.jpg",
+  "width": 330,
+  "height": 220,
+  "attribution": {
+    "DateTime": {
+      "value": "2020-03-17 07:25:53",
+      "source": "mediawiki-metadata",
+      "hidden": ""
+    },
+    "ObjectName": {
+      "value": "Texas medical center",
+      "source": "mediawiki-metadata"
+    },
+    "CommonsMetadataExtension": {
+      "value": 1.2,
+      "source": "extension",
+      "hidden": ""
+    },
+    "Categories": {
+      "value": "Houston|Texas Medical Center|Flickr images reviewed by FlickreviewR 2",
+      "source": "commons-categories",
+      "hidden": ""
+    },
+    "Assessments": {
+      "value": "",
+      "source": "commons-categories",
+      "hidden": ""
+    },
+    "ImageDescription": {
+      "value": "Houston, TX",
+      "source": "commons-desc-page"
+    },
+    "DateTimeOriginal": {
+      "value": "2012-10-02 12:04:39",
+      "source": "commons-desc-page"
+    },
+    "Credit": {
+      "value": "<a rel=\"nofollow\" class=\"external free\" href=\"https://www.flickr.com/photos/76771463@N02/8048613796/in/photostream/\">https://www.flickr.com/photos/76771463@N02/8048613796/in/photostream/</a>",
+      "source": "commons-desc-page"
+    },
+    "Artist": {
+      "value": "Katie Haugland Brown",
+      "source": "commons-desc-page"
+    },
+    "LicenseShortName": {
+      "value": "CC BY 2.0",
+      "source": "commons-desc-page",
+      "hidden": ""
+    },
+    "UsageTerms": {
+      "value": "Creative Commons Attribution 2.0",
+      "source": "commons-desc-page"
+    },
+    "AttributionRequired": {
+      "value": "true",
+      "source": "commons-desc-page",
+      "hidden": ""
+    },
+    "LicenseUrl": {
+      "value": "https://creativecommons.org/licenses/by/2.0",
+      "source": "commons-desc-page"
+    },
+    "Copyrighted": {
+      "value": "True",
+      "source": "commons-desc-page",
+      "hidden": ""
+    },
+    "Restrictions": {
+      "value": "",
+      "source": "commons-desc-page",
+      "hidden": ""
+    },
+    "License": {
+      "value": "cc-by-2.0",
+      "source": "commons-templates",
+      "hidden": ""
+    }
+  }
+}
