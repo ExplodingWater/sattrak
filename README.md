@@ -8,8 +8,6 @@ a two-dimensional compressible Euler solver, and an interactive OpenGL studio.
 - **supersonic_cfd** solves a Mach 2.5 flow over a 15-degree compression ramp using
   finite volumes, Roe fluxes, MUSCL reconstruction and SSP-RK2.
 - **ag** provides live 3D orbital/attitude visualization and a CFD explorer.
-- **visualizer.html** is a bundled browser replay of previously generated data.
-  Rebuilding the C++ programs does not refresh that embedded dataset.
 
 The numerical core uses the C++ standard library. The native GUI also uses vendored
 GLFW, GLAD, Dear ImGui, ImPlot and stb, plus platform OpenGL libraries.
@@ -125,8 +123,7 @@ is displayed in grid-index space; use VTK for physical mesh geometry.
 
 These tests are regression checks on specified cases. Mesh refinement studies,
 broader shock/expansion cases, statistical MEKF consistency tests, and interactive
-GUI smoke tests remain useful next steps. The browser replay is a separate generated
-artifact and does not inherit changes to the native simulation.
+GUI smoke tests remain useful next steps.
 
 CI separates headless builds/tests from native GUI compilation on Windows, Linux
 and macOS. A successful local Windows build does not establish that those remote
