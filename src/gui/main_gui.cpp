@@ -1,4 +1,5 @@
 #include <iostream>
+#include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <filesystem>
@@ -13,6 +14,7 @@
 
 #include "gui/adcs_view.hpp"
 #include "gui/cfd_view.hpp"
+#include "gui/music_player.hpp"
 #include "../../tests/gui_view_checks.hpp"
 
 void applyStealthAerospaceTheme() {
@@ -140,6 +142,12 @@ int main(int argc, char** argv) {
         std::cerr << "Failed to initialize ADCS 3D View.\n";
         return 1;
     }
+    glfwSetWindowUserPointer(window,&adcsView);
+    glfwSetKeyCallback(window,[](GLFWwindow* w,int key,int scancode,int action,int mods){
+        ImGui_ImplGlfw_KeyCallback(w,key,scancode,action,mods);
+        auto* view=static_cast<gui::ADCSView*>(glfwGetWindowUserPointer(w));
+        if(view)view->secretKey(key,action,ImGui::GetIO().WantTextInput);
+    });
     if (smokeTest) {
         adcsView.setCameraPreset(gui::CameraPreset::FreeOrbitArcball);
         smokeFailed = !gui::ADCSViewChecks::run(adcsView);
@@ -148,6 +156,20 @@ int main(int argc, char** argv) {
     gui::CFDView cfdView;
     if (!cfdView.init()) {
         std::cerr << "Failed to initialize CFD View.\n";
+    }
+
+    gui::MusicPlayer musicPlayer;
+    musicPlayer.init("assets/music");
+    if (smokeTest) {
+        musicPlayer.setVolumePercent(250);
+        smokeFailed |= musicPlayer.volumePercent() != 200;
+        musicPlayer.setVolumePercent(100);
+        if(musicPlayer.hasTracks()) {
+            musicPlayer.togglePause();
+            smokeFailed |= !musicPlayer.isPlaying();
+            musicPlayer.togglePause();
+            smokeFailed |= musicPlayer.isPlaying();
+        }
     }
 
     int activeStudioTab = 0; // 0: GNC & ADCS Studio, 1: Supersonic CFD Studio
@@ -173,6 +195,7 @@ int main(int argc, char** argv) {
             io.AddMousePosEvent(smokeFrame < 3 ? io.DisplaySize.x-100 : io.DisplaySize.x/2, 100);
         }
         ImGui::NewFrame();
+        musicPlayer.update(currentTime);
 
         // Top Command Bar (Tab Selector)
         ImGui::SetNextWindowPos(ImVec2(0, 0));
@@ -192,10 +215,45 @@ int main(int argc, char** argv) {
                 activeStudioTab = 1;
             }
 
-            ImGui::SameLine(ImGui::GetWindowWidth() - 160);
-            ImGui::TextDisabled("%.1f FPS | %.2f ms", io.Framerate, 1000.0f / io.Framerate);
+            ImGui::TextDisabled("|");
+            ImGui::BeginDisabled(!musicPlayer.hasTracks());
+            if (ImGui::SmallButton("|<##music_previous")) musicPlayer.previous();
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal | ImGuiHoveredFlags_NoSharedDelay))
-                ImGui::SetTooltip("Measured rendered frames per second and average frame time, including V-Sync waits.");
+                ImGui::SetTooltip("Restart the current song after three seconds, or skip to the previous song near its beginning.");
+            ImGui::SameLine();
+            if (ImGui::SmallButton(musicPlayer.isPlaying() ? "||##music_pause" : ">##music_play")) musicPlayer.togglePause();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal | ImGuiHoveredFlags_NoSharedDelay))
+                ImGui::SetTooltip("Pause or continue music. Before automatic playback begins, this starts it immediately.");
+            ImGui::SameLine();
+            if (ImGui::SmallButton(">|##music_next")) musicPlayer.next();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal | ImGuiHoveredFlags_NoSharedDelay))
+                ImGui::SetTooltip("Skip to the next song.");
+            ImGui::EndDisabled();
+            ImGui::SameLine();
+            if (io.DisplaySize.x >= 1050) {
+                ImGui::TextDisabled("%.22s", musicPlayer.displayText().c_str());
+                ImGui::SameLine();
+            }
+            ImGui::TextUnformatted("VOL");
+            ImGui::SameLine();
+            int musicVolume=musicPlayer.volumePercent();
+            ImGui::SetNextItemWidth(io.DisplaySize.x < 1050 ? 52.0f : 72.0f);
+            bool volumeChanged=ImGui::SliderInt("##music_volume_slider",&musicVolume,0,200,"%d%%",ImGuiSliderFlags_AlwaysClamp);
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(46);
+            volumeChanged|=ImGui::InputInt("##music_volume_exact",&musicVolume,0,0,ImGuiInputTextFlags_CharsDecimal);
+            musicVolume=std::clamp(musicVolume,0,200);
+            if(volumeChanged)musicPlayer.setVolumePercent(musicVolume);
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal | ImGuiHoveredFlags_NoSharedDelay))
+                ImGui::SetTooltip("Exact music volume percentage. Enter any whole number from 0 to 200; values above 100 amplify and may clip.");
+
+            const float fpsX=ImGui::GetWindowWidth()-160;
+            if(ImGui::GetCursorPosX()<fpsX) {
+                ImGui::SameLine(fpsX);
+                ImGui::TextDisabled("%.1f FPS | %.2f ms", io.Framerate, 1000.0f / io.Framerate);
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal | ImGuiHoveredFlags_NoSharedDelay))
+                    ImGui::SetTooltip("Measured rendered frames per second and average frame time, including V-Sync waits.");
+            }
             ImGui::EndMenuBar();
         }
         ImGui::End();
@@ -225,6 +283,8 @@ int main(int argc, char** argv) {
             cfdView.update(dt);
             cfdView.drawUI();
         }
+
+        adcsView.drawDiscoveryAlert();
 
         // Render ImGui onto screen
         ImGui::Render();

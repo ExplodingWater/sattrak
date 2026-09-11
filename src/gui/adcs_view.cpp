@@ -1,4 +1,5 @@
 #include "gui/adcs_view.hpp"
+#include "gui/numeric_widgets.hpp"
 #include <iostream>
 #include <iomanip>
 #include <cmath>
@@ -21,6 +22,8 @@ namespace gui {
 
 const float EARTH_RADIUS_3D = 12.0f; // Scaled 3D Earth radius
 const double KM_TO_3D = EARTH_RADIUS_3D / 6378.137;
+const double EARTH_HIGH_LOD_DISTANCE = 2.0 * EARTH_RADIUS_3D;
+const double EARTH_LOD_HYSTERESIS = 0.05;
 
 
 // Each panel follows its edge until its title bar is dragged. ImGui retains
@@ -269,7 +272,8 @@ bool ADCSView::init() {
     glEnableVertexAttribArray(0);
     glBindVertexArray(0);
 
-    m_earthMesh = createSphereMesh(EARTH_RADIUS_3D, 128, 192);
+    m_earthMeshes[0] = createSphereMesh(EARTH_RADIUS_3D, 128, 192);
+    m_earthMeshes[1] = createSphereMesh(EARTH_RADIUS_3D, 256, 384);
     m_busMesh = createBoxMesh(0.7f, 0.7f, 1.2f);
     m_solarPanelMesh = createBoxMesh(1.4f, 0.04f, 0.8f);
     m_lensMesh = createCylinderMesh(0.24f, 0.28f, 0.55f, 32);
@@ -286,6 +290,12 @@ bool ADCSView::init() {
         m_satOrbitDistance = 8.0f * modelFramingScale();
     }
 
+    m_researchCatalog.load("assets/catalog");
+    std::ifstream discovered("research_mode_unlocked.txt");
+    int unlocked=0; if(discovered>>unlocked) m_researchUnlocked=unlocked==1;
+    m_satPosECI={EARTH_RADIUS_3D+m_orbitAltitudeKm*KM_TO_3D,0,0};
+    m_previousTrailPosition=m_satPosECI;
+    m_trail={{m_satPosECI,true}};
     glGenVertexArrays(1, &m_lineVao);
     glGenBuffers(1, &m_lineVbo);
     glBindVertexArray(m_lineVao);
@@ -480,6 +490,7 @@ void ADCSView::advancePhysics(double dt) {
     double satY = r3D * std::sin(m_trueAnomalyRad) * std::sin(incRad);
     double satZ = r3D * std::sin(m_trueAnomalyRad) * std::cos(incRad);
     m_satPosECI = aero::math::Vec3(satX, satY, satZ);
+    recordTrail();
 
     // 2. Earth Diurnal Spin (if auto spin enabled)
     if (m_autoEarthSpin) {
@@ -567,6 +578,15 @@ void ADCSView::rotateSatelliteOrbit(float dx, float dy) {
     m_satOrbitYaw = std::remainder(m_satOrbitYaw + dx*m_sensitivity, 6.283185307f);
     m_satOrbitPitch = std::remainder(m_satOrbitPitch + dy*m_sensitivity, 6.283185307f);
 }
+void ADCSView::updateEarthLod(double centerDistance) {
+    // High: within 2 Earth radii. Low: beyond 2 Earth radii. Five percent
+    // overlap keeps the selected mesh stable near the boundary.
+    if (m_earthLod == 1) {
+        if (centerDistance > EARTH_HIGH_LOD_DISTANCE * (1.0 + EARTH_LOD_HYSTERESIS)) m_earthLod = 0;
+    } else if (centerDistance < EARTH_HIGH_LOD_DISTANCE * (1.0 - EARTH_LOD_HYSTERESIS)) {
+        m_earthLod = 1;
+    }
+}
 void ADCSView::render3D(int width, int height) {
     glViewport(0, 0, width, height);
     glEnable(GL_DEPTH_TEST);
@@ -633,6 +653,7 @@ void ADCSView::render3D(int width, int height) {
     }
 
     m_cameraEye = camEye;
+    updateEarthLod(camEye.norm());
     m_cameraForward = (camTarget - camEye).normalized();
     if (std::abs(m_cameraForward.dot(camUp.normalized())) > 0.999)
         camUp = std::abs(m_cameraForward[1]) < 0.9 ? aero::math::Vec3(0,1,0) : aero::math::Vec3(1,0,0);
@@ -668,7 +689,7 @@ void ADCSView::render3D(int width, int height) {
     m_shader3D.setInt("uTexture", 0);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, m_earthTexId);
-    m_earthMesh.draw();
+    m_earthMeshes[m_earthLod].draw();
 
     // Integrate atmospheric density along the view and sunlight rays.
     glEnable(GL_BLEND);
@@ -683,13 +704,16 @@ void ADCSView::render3D(int width, int height) {
     Mat4 shell = Mat4::scale(1.02f, 1.02f, 1.02f);
     m_atmosphereShader.setMat4("uModel", shell);
     m_atmosphereShader.setMat4("uMVP", Mat4::multiply(viewProj, shell));
-    m_earthMesh.draw();
+    m_earthMeshes[m_earthLod].draw();
     glDisable(GL_CULL_FACE);
     glCullFace(GL_BACK);
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    m_shader3D.use();
+
+    drawResearchAndTrail(viewProj, width, height);
     m_shader3D.use();
 
     // 2. Ground Target Pin
@@ -755,6 +779,7 @@ void ADCSView::render3D(int width, int height) {
     }
 
     drawReentry(viewProj, satModel, height);
+    if(m_realScale) drawResearchAndTrail(viewProj,width,height,true);
 
     if (m_realScale) return; // No oversized guide laser in the physical-scale view.
 
@@ -919,12 +944,142 @@ color=vec4(mix(vec3(1,.12,.01),vec3(1,.8,.35),glow),pow(1-r,2)*.6*glow);})";
     glDepthMask(GL_TRUE);glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);glDisable(GL_PROGRAM_POINT_SIZE);glBindVertexArray(0);
 }
 
+
+void ADCSView::secretKey(int key,int action,bool typing) {
+    if(action!=GLFW_PRESS || m_researchUnlocked) return;
+    if(typing) {m_secretProgress=0;return;}
+    if(key==GLFW_KEY_LEFT_SHIFT || key==GLFW_KEY_RIGHT_SHIFT || key==GLFW_KEY_LEFT_CONTROL || key==GLFW_KEY_RIGHT_CONTROL) return;
+    constexpr int code[]={GLFW_KEY_UP,GLFW_KEY_UP,GLFW_KEY_DOWN,GLFW_KEY_DOWN,GLFW_KEY_LEFT,GLFW_KEY_RIGHT,GLFW_KEY_LEFT,GLFW_KEY_RIGHT,GLFW_KEY_B,GLFW_KEY_A,GLFW_KEY_ENTER};
+    // Keep the longest suffix matching a prefix, including overlapping Up presses.
+    std::vector<int> entered(code,code+m_secretProgress);entered.push_back(key);
+    m_secretProgress=0;
+    for(size_t length=1;length<=std::min(entered.size(),size_t(11));++length)
+        if(std::equal(entered.end()-length,entered.end(),code))m_secretProgress=unsigned(length);
+    if(m_secretProgress==11) {
+        m_researchUnlocked=true;m_secretProgress=0;
+        m_discoveryUntil=ImGui::GetTime()+6.0;
+        std::ofstream("research_mode_unlocked.txt")<<1;
+    }
+}
+void ADCSView::drawDiscoveryAlert() {
+    if(ImGui::GetTime()>=m_discoveryUntil)return;
+    auto size=ImGui::GetIO().DisplaySize;
+    if(size.x<80 || size.y<80)return;
+    const char* message="A new mode has been discovered!";
+    auto* font=ImGui::GetFont();
+    float fontSize=std::min(28.0f,(size.x-32)/float(std::strlen(message))/.62f);
+    auto text=font->CalcTextSizeA(fontSize,FLT_MAX,0,message);
+    ImVec2 position((size.x-text.x)/2,std::min(size.y-text.y-24,size.y*.5f+200));
+    auto* draw=ImGui::GetForegroundDrawList();
+    draw->AddRectFilled({position.x-14,position.y-10},{position.x+text.x+14,position.y+text.y+10},IM_COL32(0,0,0,220),6);
+    // Two color cycles per second; text remains visible throughout the six seconds.
+    ImU32 color=int(ImGui::GetTime()*4)%2?IM_COL32(255,60,40,255):IM_COL32(255,235,40,255);
+    draw->AddText(font,fontSize,position,color,message);
+}
+void ADCSView::recordTrail() {
+    bool jump=(m_satPosECI-m_previousTrailPosition).norm()>10*KM_TO_3D;
+    m_previousTrailPosition=m_satPosECI;
+    if(m_trail.empty())m_trail.push_back({m_satPosECI,true});
+    if(jump || m_simTimeSec>=m_nextTrailTime) {
+        m_trail.push_back({m_satPosECI,jump});m_nextTrailTime=m_simTimeSec+m_trailInterval;
+        if(m_trail.size()>65536) {
+            std::vector<TrailPoint> simplified;simplified.reserve(m_trail.size()/2+2);
+            for(size_t i=0;i<m_trail.size();++i)
+                if(i==0 || i+1==m_trail.size() || i%2==0 || m_trail[i].start || m_trail[i+1].start) simplified.push_back(m_trail[i]);
+            m_trail.swap(simplified);m_trailInterval*=2;
+        }
+    }
+}
+void ADCSView::drawResearchAndTrail(const Mat4& vp,int width,int height,bool closePass) {
+    using aero::math::Vec3;
+    if(width<=0 || height<=0)return;
+    auto occulted=[&](Vec3 p){auto delta=p-m_cameraEye;double length=delta.norm();if(length<1e-10)return false;
+        auto direction=delta/length;double b=m_cameraEye.dot(direction),c=m_cameraEye.dot(m_cameraEye)-EARTH_RADIUS_3D*EARTH_RADIUS_3D;
+        double disc=b*b-c;if(disc<0)return false;
+        double hit=-b-std::sqrt(disc);return hit>0 && hit<length;
+    };
+    if(!closePass && m_showResearch && m_researchUnlocked) {
+        std::vector<float> points; m_catalogRendered=0;
+        std::string hover;float nearest=100;
+        auto mouse=ImGui::GetIO().MousePos;
+        for(size_t i=0;i<m_researchCatalog.satellites.size();++i) {
+            Vec3 p;if(!m_researchCatalog.position(i,m_simTimeSec,p))continue;
+            p=p*KM_TO_3D;double c=std::cos(m_earthSpinAngleRad),s=std::sin(m_earthSpinAngleRad);
+            p={c*p.x+s*p.z,p.y,-s*p.x+c*p.z};
+            points.insert(points.end(),{float(p.x),float(p.y),float(p.z)});++m_catalogRendered;
+            double clip[4]{};for(int row=0;row<4;++row)clip[row]=vp.m[row]*p.x+vp.m[4+row]*p.y+vp.m[8+row]*p.z+vp.m[12+row];
+            if(clip[3]>0 && !occulted(p)) {
+                float x=float((clip[0]/clip[3]*.5+.5)*width),y=float((.5-clip[1]/clip[3]*.5)*height);
+                // Framebuffer to ImGui coordinates (also works on high-DPI displays).
+                x*=ImGui::GetIO().DisplaySize.x/width;y*=ImGui::GetIO().DisplaySize.y/height;
+                float distance=(x-mouse.x)*(x-mouse.x)+(y-mouse.y)*(y-mouse.y);
+                if(distance<nearest){nearest=distance;hover=m_researchCatalog.satellites[i].name+" | NORAD "+std::to_string(m_researchCatalog.satellites[i].norad);}
+            }
+        }
+        m_lineShader.use();m_lineShader.setMat4("uMVP",vp);m_lineShader.setVec4("uColor",.35f,.85f,1,1);
+        glBindVertexArray(m_lineVao);glBindBuffer(GL_ARRAY_BUFFER,m_lineVbo);
+        glBufferData(GL_ARRAY_BUFFER,std::max(size_t(3072),points.size())*sizeof(float),nullptr,GL_DYNAMIC_DRAW);
+        if(!points.empty())glBufferSubData(GL_ARRAY_BUFFER,0,points.size()*sizeof(float),points.data());
+        glPointSize(5);glDrawArrays(GL_POINTS,0,GLsizei(points.size()/3));glPointSize(1);glBindVertexArray(0);
+        if(!hover.empty() && sceneAcceptsInput()) {
+            auto* draw=ImGui::GetForegroundDrawList();auto extent=ImGui::CalcTextSize(hover.c_str());
+            ImVec2 at(std::max(8.0f,std::min(mouse.x+12,ImGui::GetIO().DisplaySize.x-extent.x-8)),std::max(8.0f,mouse.y-25));
+            draw->AddRectFilled({at.x-4,at.y-3},{at.x+extent.x+4,at.y+extent.y+3},IM_COL32(0,0,0,225),3);
+            draw->AddText(at,IM_COL32(160,230,255,255),hover.c_str());
+        }
+    }
+    if(!m_showTrail || m_trail.size()<1 || (m_realScale!=closePass))return;
+    if(!m_historyVao) {
+        if(!m_ribbonShader.loadFromSource("#version 330 core\nlayout(location=0)in vec4 clip;void main(){gl_Position=clip;}",
+            "#version 330 core\nout vec4 color;void main(){color=vec4(.55,1,.65,1);}"))return;
+        glGenVertexArrays(1,&m_historyVao);glGenBuffers(1,&m_historyVbo);
+        glBindVertexArray(m_historyVao);glBindBuffer(GL_ARRAY_BUFFER,m_historyVbo);
+        glEnableVertexAttribArray(0);glVertexAttribPointer(0,4,GL_FLOAT,GL_FALSE,4*sizeof(float),nullptr);
+    }
+    std::vector<float> vertices;vertices.reserve(m_trail.size()*24);
+    auto segment=[&](Vec3 start,Vec3 end){
+        if((end-start).norm()<1e-12 || occulted((start+end)*.5))return;
+        double distanceKm=(((start+end)*.5)-m_cameraEye).norm()/KM_TO_3D;
+        double pixels=1.1+2.2*std::clamp(distanceKm/3000.0,0.0,1.0);
+        auto project=[&](Vec3 p){if(closePass)p=(p-m_satPosECI)/spacecraftScale();std::array<double,4> clip{};
+            for(int row=0;row<4;++row)clip[row]=vp.m[row]*p.x+vp.m[4+row]*p.y+vp.m[8+row]*p.z+vp.m[12+row];return clip;};
+        auto a=project(start),b=project(end);
+        double da=a[2]+a[3],db=b[2]+b[3];if(da<=0 && db<=0)return;
+        if(da<=0 || db<=0){double t=da/(da-db);auto clipped=a;for(int i=0;i<4;++i)clipped[i]=a[i]+t*(b[i]-a[i]);if(da<=0)a=clipped;else b=clipped;}
+        if(a[3]<=1e-12 || b[3]<=1e-12)return;
+        double dx=(b[0]/b[3]-a[0]/a[3])*width,dy=(b[1]/b[3]-a[1]/a[3])*height;
+        double norm=std::hypot(dx,dy);if(norm<1e-9)return;
+        double nx=-dy/norm*pixels/width,ny=dx/norm*pixels/height;
+        auto vertex=[&](const auto& p,int sign){vertices.insert(vertices.end(),{float(p[0]+sign*nx*p[3]),float(p[1]+sign*ny*p[3]),float(p[2]),float(p[3])});};
+        vertex(a,1);vertex(a,-1);vertex(b,1);vertex(b,1);vertex(a,-1);vertex(b,-1);
+    };
+    for(size_t i=1;i<m_trail.size();++i)if(!m_trail[i].start)segment(m_trail[i-1].position,m_trail[i].position);
+    segment(m_trail.back().position,m_satPosECI);
+    m_ribbonShader.use();glBindVertexArray(m_historyVao);glBindBuffer(GL_ARRAY_BUFFER,m_historyVbo);
+    glBufferData(GL_ARRAY_BUFFER,vertices.size()*sizeof(float),vertices.data(),GL_STREAM_DRAW);
+    glDrawArrays(GL_TRIANGLES,0,GLsizei(vertices.size()/4));glBindVertexArray(0);
+}
+
 void ADCSView::drawSettings() {
     if (m_openSettings) { ImGui::OpenPopup("Camera & simulation settings"); m_openSettings = false; }
     ImGui::SetNextWindowSize(ImVec2(std::min(500.0f, ImGui::GetIO().DisplaySize.x-24), 0), ImGuiCond_Appearing);
     bool open = true;
     if (ImGui::BeginPopupModal("Camera & simulation settings", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::PushItemWidth(220);
+        ImGui::Checkbox("Satellite trail since t=0", &m_showTrail);
+        explain("Light-green flight history recorded from simulation start, even while hidden. Older samples are progressively simplified. It gets visually thinner nearby. Position jumps start a new segment.");
+        if(m_researchUnlocked) {
+            ImGui::BeginDisabled(m_researchCatalog.satellites.empty());
+            if(ImGui::Checkbox("Research satellites", &m_showResearch) && m_showResearch) {
+                m_camPreset=CameraPreset::FreeOrbitArcball;
+                m_arcballCenter={0,0,0};m_arcballDist=42;
+            }
+            ImGui::EndDisabled();
+            ImGui::TextWrapped("%s",m_researchCatalog.status.c_str());
+            ImGui::TextWrapped("CelesTrak: science, Earth resources and weather. Hover a dot for its name. Catalog epoch + simulation time; offline snapshot, not live tracking.");
+            if(m_simTimeSec>7*86400) ImGui::TextWrapped("Orbital predictions become less reliable far from the catalog date.");
+        }
+        ImGui::Separator();
         if (ImGui::Checkbox("Atmospheric entry preview", &m_entryPreview)) {
             m_orbitAltitudeKm=m_entryPreview ? 80 : 650;
             if(m_entryPreview) m_camPreset=CameraPreset::SatelliteOrbit;
@@ -932,8 +1087,8 @@ void ADCSView::drawSettings() {
         explain("Prescribed descent with geometry-dependent heating. Does not solve drag-driven trajectory, ablation or breakup. Disable to return to 650 km.");
         if(m_entryPreview) {
             float altitude=float(m_orbitAltitudeKm);
-            if(ImGui::SliderFloat("Entry altitude",&altitude,20,150,"%.1f km")) m_orbitAltitudeKm=altitude;
-            ImGui::SliderFloat("Descent speed",&m_descentKmS,0,1,"%.2f km/s");
+            if(sliderFloatExact("Entry altitude",&altitude,20,150,"%.1f km","%.1f")) m_orbitAltitudeKm=altitude;
+            sliderFloatExact("Descent speed",&m_descentKmS,0,1,"%.2f km/s","%.2f");
         }
         ImGui::Separator();
         if (ImGui::BeginCombo("Satellite model", m_selectedModel == 0 ? "Low poly" : "Landsat 8")) {
@@ -947,9 +1102,9 @@ void ADCSView::drawSettings() {
         if (m_selectedModel == 1) ImGui::TextDisabled("Model: NASA / Christopher R. Meaney");
         if (m_landsatModel.parts.empty()) ImGui::TextWrapped("Landsat 8 model could not be loaded.");
         ImGui::Separator();
-        ImGui::SliderFloat("Look sensitivity", &m_sensitivity, 0.0002f, 0.012f, "%.4f rad/px", ImGuiSliderFlags_Logarithmic);
+        sliderFloatExact("Look sensitivity", &m_sensitivity, 0.0002f, 0.012f, "%.4f rad/px", "%.4f", ImGuiSliderFlags_Logarithmic);
         explain("Mouse-look rotation per pixel. Applies to free look; lower values give finer aim.");
-        ImGui::SliderFloat("Wheel sensitivity", &m_scrollSensitivity, 0.1f, 5.0f, "%.2fx");
+        sliderFloatExact("Wheel sensitivity", &m_scrollSensitivity, 0.1f, 5.0f, "%.2fx", "%.2f");
         explain("Zoom/dolly sensitivity. The wheel affects the scene only while the cursor is outside every panel and popup.");
         ImGui::Separator();
         bool realScale = m_realScale;
@@ -959,9 +1114,9 @@ void ADCSView::drawSettings() {
             ? "Earth radius: 6,378 km. Satellite bus: 0.7 x 0.7 x 1.2 m; wingspan: about 4.2 m."
             : "Earth radius: 6,378 km. Landsat 8 uses the NASA model scale, with approximately 5 x 10 x 12.3 m deployed bounds.");
         ImGui::BeginDisabled(!m_realScale);
-        ImGui::SliderFloat("User speed", &m_userSpeedKmS, 0.001f, 1000.0f, "%.3f km/s", ImGuiSliderFlags_Logarithmic);
+        sliderFloatExact("User speed", &m_userSpeedKmS, 0.001f, 1000.0f, "%.3f km/s", "%.3f", ImGuiSliderFlags_Logarithmic);
         explain("Free-flight speed in kilometers per real second. Shift triples it. Diagonal movement is normalized.");
-        ImGui::SliderFloat("Satellite speed", &m_satelliteSpeedFactor, 0.0f, 20.0f, "%.2fx circular orbit");
+        sliderFloatExact("Satellite speed", &m_satelliteSpeedFactor, 0.0f, 20.0f, "%.2fx circular orbit", "%.2f");
         explain("One is the circular-orbit speed at this altitude. Zero holds orbital position; other values override orbital motion for experimentation without changing the simulation clock or Earth rotation.");
         double orbitalSpeed = std::sqrt(398600.44 / (6378.137 + m_orbitAltitudeKm));
         ImGui::Text("Satellite: %.3f km/s", orbitalSpeed * m_satelliteSpeedFactor);
@@ -1180,7 +1335,7 @@ void ADCSView::drawControlPanel() {
     float earthRotDeg = (float)(m_earthSpinAngleRad * 180.0 / 3.14159265);
     while (earthRotDeg < 0.0f) earthRotDeg += 360.0f;
     while (earthRotDeg >= 360.0f) earthRotDeg -= 360.0f;
-    if (ImGui::SliderFloat("Manual Rotation", &earthRotDeg, 0.0f, 360.0f, "%.1f°")) {
+    if (sliderFloatExact("Manual Rotation", &earthRotDeg, 0.0f, 360.0f, "%.1f°", "%.1f")) {
         m_earthSpinAngleRad = earthRotDeg * (3.14159265 / 180.0);
     }
     explain("Earth rotation angle about the polar axis, in degrees.");
@@ -1257,20 +1412,20 @@ void ADCSView::drawControlPanel() {
     ImGui::TextColored(ImVec4(0.22f, 0.74f, 0.97f, 1.0f), "SIMULATION TIME & ORBIT:");
     explain("Adjust simulated time, circular orbit altitude, and orbital inclination.");
     ImGui::BeginDisabled(m_realScale);
-    ImGui::SliderFloat("Time Warp", &m_timeWarp, 1.0f, 50.0f, "%.0fx");
+    sliderFloatExact("Time Warp", &m_timeWarp, 1.0f, 50.0f, "%.0fx", "%.0f");
     ImGui::EndDisabled();
     explain("Simulated seconds advanced per real second. Affects the orbit, attitude dynamics and Earth rotation.");
-    ImGui::SliderFloat("Spin Warp", &m_earthSpinWarp, 0.0f, 30.0f, "%.0fx");
+    sliderFloatExact("Spin Warp", &m_earthSpinWarp, 0.0f, 30.0f, "%.0fx", "%.0f");
     explain("Additional multiplier for Earth rotation only. Zero stops automatic Earth rotation.");
 
     float alt = (float)m_orbitAltitudeKm;
-    if (ImGui::SliderFloat("Altitude", &alt, 400.0f, 1500.0f, "%.0f km")) {
+    if (sliderFloatExact("Altitude", &alt, 400.0f, 1500.0f, "%.0f km", "%.0f")) {
         m_orbitAltitudeKm = alt;
     }
     explain("Circular orbit height above the reference Earth surface, in kilometers.");
 
     float inc = (float)m_orbitInclinationDeg;
-    if (ImGui::SliderFloat("Inclination", &inc, 0.0f, 98.0f, "%.1f°")) {
+    if (sliderFloatExact("Inclination", &inc, 0.0f, 98.0f, "%.1f°", "%.1f")) {
         m_orbitInclinationDeg = inc;
     }
     explain("Tilt of the orbital plane relative to the equator. Zero is equatorial; 90 degrees is polar.");
@@ -1384,9 +1539,13 @@ void ADCSView::cleanup() {
     if(m_entryVao) glDeleteVertexArrays(1,&m_entryVao);
     if(m_entryVbo) glDeleteBuffers(1,&m_entryVbo);
     m_entryVao=m_entryVbo=0;
+    m_ribbonShader.cleanup();
+    if(m_historyVao) glDeleteVertexArrays(1,&m_historyVao);
+    if(m_historyVbo) glDeleteBuffers(1,&m_historyVbo);
+    m_historyVao=m_historyVbo=0;
     m_atmosphereShader.cleanup();
     m_landsatModel.cleanup();
-    m_earthMesh.cleanup();
+    for (auto& mesh : m_earthMeshes) mesh.cleanup();
     m_busMesh.cleanup();
     m_solarPanelMesh.cleanup();
     m_lensMesh.cleanup();

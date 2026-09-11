@@ -1,0 +1,14 @@
+{
+  "retrieved_utc": "2026-09-10T20:19:02.694284+00:00",
+  "sources": [
+    "https://celestrak.org/NORAD/elements/gp.php?GROUP=science&FORMAT=tle",
+    "https://celestrak.org/NORAD/elements/gp.php?GROUP=resource&FORMAT=tle",
+    "https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=tle"
+  ],
+  "group_counts": {
+    "science": 46,
+    "resource": 167,
+    "weather": 72
+  },
+  "unique_satellites": 282
+}

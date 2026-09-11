@@ -1,0 +1,62 @@
+[
+  {
+    "title": "2003 Toyota Corolla",
+    "artist": "2003 Toyota Corolla (Haylee)",
+    "file": "2003 Toyota Corolla.mp3",
+    "source": "https://archive.org/download/2003-toyota-corolla/2003%20Toyota%20Corolla%20-%202003%20Toyota%20Corolla%20-%2001%202003%20Toyota%20Corolla.mp3",
+    "conversion": "Original archive MP3; verified against published MD5",
+    "downloaded": "2026-09-11",
+    "bytes": 8864802,
+    "sha256": "6f8d6d15b3160eba8db01b752e259d5c1927a903d8e204c01b0e0ce0060053e8"
+  },
+  {
+    "title": "2004 Toyota Corolla",
+    "artist": "2003 Toyota Corolla (Haylee)",
+    "file": "2004 Toyota Corolla.mp3",
+    "source": "https://archive.org/download/2003-toyota-corolla/2003%20Toyota%20Corolla%20-%202003%20Toyota%20Corolla%20-%2002%202004%20Toyota%20Corolla.mp3",
+    "conversion": "Original archive MP3; verified against published MD5",
+    "downloaded": "2026-09-11",
+    "bytes": 6838114,
+    "sha256": "39c912433bddaa9f89eaf1a395a443388fe1717ca245413404844ce8fb412809"
+  },
+  {
+    "title": "2005 Toyota Corolla",
+    "artist": "2003 Toyota Corolla (Haylee)",
+    "file": "2005 Toyota Corolla.mp3",
+    "source": "https://www.youtube.com/watch?v=rN66-iQTfto",
+    "conversion": "YouTube Opus audio transcoded to MP3 using libmp3lame VBR quality 0",
+    "downloaded": "2026-09-11",
+    "bytes": 2211833,
+    "sha256": "5da1211b46826507fa2c018570f764b44539a90447ed84c0f158aaa8e6c98fc1"
+  },
+  {
+    "title": "2006 Toyota Corolla",
+    "artist": "2003 Toyota Corolla (Haylee)",
+    "file": "2006 Toyota Corolla.mp3",
+    "source": "https://www.youtube.com/watch?v=VbAvqTzPkAw",
+    "conversion": "YouTube Opus audio transcoded to MP3 using libmp3lame VBR quality 0",
+    "downloaded": "2026-09-11",
+    "bytes": 43740425,
+    "sha256": "744ca6a6bfca1f2aff48076ac165dfe07cae3c24032167ac137e8beb5efe95ba"
+  },
+  {
+    "title": "2007 Toyota Corolla",
+    "artist": "2003 Toyota Corolla (Haylee)",
+    "file": "2007 Toyota Corolla.mp3",
+    "source": "https://www.youtube.com/watch?v=STL42qDReW0",
+    "conversion": "YouTube Opus audio transcoded to MP3 using libmp3lame VBR quality 0",
+    "downloaded": "2026-09-11",
+    "bytes": 22957577,
+    "sha256": "8a573f2a8cf1883fc312703435adf50b9ed21a40df6830d48aec771e198569d6"
+  },
+  {
+    "title": "2009 Toyota Corolla",
+    "artist": "2003 Toyota Corolla (Haylee)",
+    "file": "2009 Toyota Corolla.mp3",
+    "source": "https://www.youtube.com/watch?v=04E_8FbYROk",
+    "conversion": "YouTube Opus audio transcoded to MP3 using libmp3lame VBR quality 0",
+    "downloaded": "2026-09-11",
+    "bytes": 24225929,
+    "sha256": "3b41c947926d4b8fcceac3b3964ff769544a36d48ccb1b55a4fc04dcfc839a1b"
+  }
+]

@@ -47,10 +47,17 @@ set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
 add_subdirectory(external/glfw)
 
+file(GLOB SGP4_SOURCES CONFIGURE_DEPENDS external/sgp4/*.cc)
+add_library(sattrack_sgp4 STATIC ${SGP4_SOURCES})
+target_include_directories(sattrack_sgp4 PUBLIC external/sgp4)
+
 set(GUI_SOURCES
     src/gui/main_gui.cpp
     src/gui/gl_util.cpp
     src/gui/satellite_model.cpp
+    src/gui/research_catalog.cpp
+    src/gui/music_player.cpp
+    src/gui/music_player.cpp
     src/gui/adcs_view.cpp
     src/gui/cfd_view.cpp
     external/glad/src/glad.c
@@ -77,12 +84,20 @@ target_include_directories(ag SYSTEM PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/backends
     ${CMAKE_CURRENT_SOURCE_DIR}/external/implot
     ${CMAKE_CURRENT_SOURCE_DIR}/external/stb
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/miniaudio
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/miniaudio
 )
 
 target_link_libraries(ag PRIVATE
+    sattrack_sgp4
     glfw
     OpenGL::GL
 )
+if(UNIX AND NOT APPLE)
+    target_link_libraries(ag PRIVATE ${CMAKE_DL_LIBS} pthread m)
+elseif(APPLE)
+    target_link_libraries(ag PRIVATE "-framework CoreFoundation" "-framework CoreAudio" "-framework AudioToolbox")
+endif()
 if(WIN32)
     target_link_libraries(ag PRIVATE winmm)
 endif()

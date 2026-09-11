@@ -7,6 +7,18 @@ namespace gui {
 // Invoked by --smoke-test while a real OpenGL context is active.
 struct ADCSViewChecks {
     static void prepareFrame(ADCSView& view, int frame) {
+        if(frame==0) {
+            view.m_showTrail=true;
+            // Deterministic long-history fixture for rendering, without accelerating attitude integration.
+            view.m_trail.clear();
+            double radius=12+(650.0*12/6378.137), inc=view.m_orbitInclinationDeg*3.141592653589793/180;
+            for(int i=0;i<=600;++i) {
+                double a=(i-600)*.008;
+                view.m_trail.push_back({{radius*std::cos(a),radius*std::sin(a)*std::sin(inc),radius*std::sin(a)*std::cos(inc)},i==0});
+            }
+            view.m_researchUnlocked=true;view.m_showResearch=true;
+            view.m_discoveryUntil=ImGui::GetTime()+6;
+        }
         if (frame == 8) view.selectModel(1);
         if (frame == 12) {
             view.selectModel(1);
@@ -60,6 +72,56 @@ struct ADCSViewChecks {
         view.m_orbitAltitudeKm=100; view.updateReentry();
         if(view.m_heatFlux>=hot) return false;
         view.m_orbitAltitudeKm=650; view.updateReentry();
+        {
+            ADCSView lod;
+            lod.m_earthLod=0;
+            lod.updateEarthLod(12.0);
+            if(lod.m_earthLod!=1) {std::cerr<<"High Earth LOD was not selected\n";return false;}
+            lod.updateEarthLod(24.5);
+            if(lod.m_earthLod!=1) {std::cerr<<"Earth LOD hysteresis failed at near boundary\n";return false;}
+            lod.updateEarthLod(26.0);
+            if(lod.m_earthLod!=0) {std::cerr<<"Distant Earth LOD was not selected\n";return false;}
+            lod.updateEarthLod(24.5);
+            if(lod.m_earthLod!=0) {std::cerr<<"Earth LOD hysteresis failed at far boundary\n";return false;}
+            lod.updateEarthLod(22.0);
+            if(lod.m_earthLod!=1) {std::cerr<<"Earth LOD did not return to high\n";return false;}
+        }
+        {
+            if(view.m_researchCatalog.satellites.size()<200) {
+                std::cerr<<view.m_researchCatalog.status<<"\n";return false;
+            }
+            aero::math::Vec3 p0,p1;
+            if(!view.m_researchCatalog.position(0,0,p0) || !view.m_researchCatalog.position(0,60,p1) || (p1-p0).norm()<1) return false;
+            libsgp4::SGP4 reference(libsgp4::Tle("VANGUARD 1",
+                "1 00005U 58002B   00179.78495062  .00000023  00000-0  28098-4 0  4753",
+                "2 00005  34.2682 348.7242 1859667 331.7664  19.3264 10.82419157413667"));
+            auto r=reference.FindPosition(0.0).Position();
+            if(std::abs(r.x-7022.46529266)>.001 || std::abs(r.y+1400.08296755)>.001 || std::abs(r.z-.03995155)>.001) {
+                std::cerr<<"SGP4 reference position mismatch\n";return false;
+            }
+            ADCSView secret;
+            constexpr int code[]={GLFW_KEY_UP,GLFW_KEY_UP,GLFW_KEY_DOWN,GLFW_KEY_DOWN,GLFW_KEY_LEFT,GLFW_KEY_RIGHT,GLFW_KEY_LEFT,GLFW_KEY_RIGHT,GLFW_KEY_B,GLFW_KEY_A,GLFW_KEY_ENTER};
+            for(int key:code)secret.secretKey(key,GLFW_PRESS,true);
+            if(secret.m_researchUnlocked)return false;
+            secret.secretKey(GLFW_KEY_UP,GLFW_PRESS,false);
+            secret.secretKey(GLFW_KEY_UP,GLFW_REPEAT,false);
+            if(secret.m_secretProgress!=1)return false;
+            secret.secretKey(GLFW_KEY_X,GLFW_PRESS,false);
+            if(secret.m_secretProgress!=0)return false;
+            for(int i=0;i<10;++i)secret.secretKey(code[i],GLFW_PRESS,false);
+            if(secret.m_researchUnlocked)return false;
+            secret.secretKey(GLFW_KEY_ENTER,GLFW_PRESS,false);
+            if(!secret.m_researchUnlocked || std::abs(secret.m_discoveryUntil-ImGui::GetTime()-6)>1e-6)return false;
+            if(secret.m_showTrail || secret.m_showResearch)return false;
+            ADCSView history;
+            history.m_satPosECI={13.2,0,0};history.m_previousTrailPosition=history.m_satPosECI;
+            history.m_trail={{history.m_satPosECI,true}};
+            auto first=history.m_trail.front().position;
+            for(int i=1;i<=70000;++i){history.m_simTimeSec=i;history.m_satPosECI={13.2,double(i)*1e-7,0};history.recordTrail();}
+            if(history.m_trail.size()>65536 || (history.m_trail.front().position-first).norm()!=0 || history.m_showTrail)return false;
+            history.m_satPosECI={20,0,0};history.recordTrail();
+            if(!history.m_trail.back().start)return false;
+        }
         const auto oldState = view.m_satState.q;
         const double oldTime = view.m_simTimeSec;
         view.selectModel(1);

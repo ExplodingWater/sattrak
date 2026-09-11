@@ -11,6 +11,7 @@
 #include "adcs/controller.hpp"
 #include "gui/gl_util.hpp"
 #include "gui/satellite_model.hpp"
+#include "gui/research_catalog.hpp"
 
 namespace gui {
 
@@ -67,6 +68,8 @@ public:
     bool init();
     void handleInput(GLFWwindow* window, float dt);
     void update(float dt);
+    void secretKey(int key, int action, bool typing);
+    void drawDiscoveryAlert();
     void suspendAudio() { updateAlarm(false); }
     void render3D(int width, int height);
     void drawUI();
@@ -84,6 +87,21 @@ private:
     bool sceneAcceptsInput() const;
     void moveFlycam(double forward, double right, double up, bool boost, double dt);
     void drawSettings();
+    void drawResearchAndTrail(const Mat4& viewProj, int width, int height, bool closePass=false);
+    void recordTrail();
+    void updateEarthLod(double centerDistance);
+    ResearchCatalog m_researchCatalog;
+    bool m_researchUnlocked=false, m_showResearch=false, m_showTrail=false;
+    unsigned m_secretProgress=0;
+    double m_discoveryUntil=0;
+    struct TrailPoint { aero::math::Vec3 position; bool start; };
+    std::vector<TrailPoint> m_trail;
+    double m_nextTrailTime=1, m_trailInterval=1;
+    aero::math::Vec3 m_previousTrailPosition;
+    ShaderProgram m_ribbonShader;
+    unsigned m_historyVao=0,m_historyVbo=0;
+    int m_catalogRendered=0;
+
     void updateReentry();
     void drawReentry(const Mat4& viewProj, const Mat4& satModel, int height);
     void updateAlarm(bool active);
@@ -120,7 +138,10 @@ private:
     aero::math::Vec3 m_flyForward{0, 0, -1};
     aero::math::Vec3 m_flyUp{0, 1, 0};
     void enterFlycam();
-    Mesh m_earthMesh;
+    // Two complete sphere meshes. The active one is selected from camera-to-center
+    // distance with hysteresis so crossing a boundary does not cause visible chatter.
+    Mesh m_earthMeshes[2]; // 0: existing mesh (low), 1: four-times-denser mesh (high)
+    int m_earthLod = 0;
     Mesh m_busMesh;
     Mesh m_solarPanelMesh;
     Mesh m_lensMesh;

@@ -1,0 +1,3 @@
+Unmodified libsgp4 sources from https://github.com/dnwrnr/sgp4
+Commit: 661e057a5d369d5ee424676cf1d69cbead95ff2c
+License: Apache-2.0 (see LICENSE).

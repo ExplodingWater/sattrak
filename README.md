@@ -215,3 +215,17 @@ Its physical-scale geometry in 1:1 mode is unchanged.
 Camera & simulation settings includes an atmospheric-entry preview with altitude and descent controls. Windward spacecraft surfaces emit a glow and downstream wake based on approximate atmospheric heating. A flashing telemetry warning includes a mute/unmute button for the generated Windows alarm. See [model assumptions and limitations](docs/REENTRY.md).
 
 The entry path is prescribed; this feature does not predict orbital decay, structural failure or spacecraft survival. NASA model assets and location photographs retain their own credits and usage terms in `assets/`; the project's MIT license does not override those terms.
+
+## Satellite history and hidden research catalog
+
+The Settings option **Satellite trail since t=0** starts off. History records even while hidden; the light-green line narrows at close range. Older samples are progressively simplified while preserving the starting point and discontinuities. History is for the current session only.
+
+Enter **Up, Up, Down, Down, Left, Right, Left, Right, B, A, Enter** outside a text field to discover **Research satellites** in Settings. A red/yellow discovery caption appears for six real seconds, and the unlock is remembered locally. Enabling the mode switches to an Earth overview; cyan dots can be hovered for names and NORAD IDs.
+
+The bundled catalog includes 282 unique objects from CelesTrak's science, Earth-resources and weather groups at the snapshot date. It is not an exhaustive list of every scientific mission. libsgp4 (Apache-2.0) propagates the actual element sets from the saved UTC epoch plus simulation time. ag.exe works offline. Data provenance and limitations are in [catalog credits](assets/catalog/CREDITS.md). To refresh: `python scripts/update_research_catalog.py`, then rebuild.
+
+Earth geometry uses two automatic distance levels. The existing 128 x 192 sphere is the lower tier with 49,152 triangles. Camera distances within two Earth radii use a new 256 x 384 sphere with 196,608 triangles; greater distances retain the existing mesh. A five-percent overlap around the boundary prevents rapid switching while the camera hovers near the threshold. Distance is measured from the camera to Earth's center.
+
+The top music bar plays local MP3, WAV, Ogg Vorbis and FLAC files from `assets/music` in filename order. Automatic playback starts after a randomized 45-60 second delay and fades in the first track. Previous/restart, pause/resume and next controls do not expose a seek bar. Volume accepts both slider input and an exact integer from 0-200%, and is remembered locally. Audio files retain their own rights and are not covered by the source code's MIT license.
+
+Every adjustable slider has an exact numeric entry box beside it. Typed values are clamped to the same safe range as the slider.

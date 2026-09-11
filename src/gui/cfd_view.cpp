@@ -1,4 +1,5 @@
 #include "gui/cfd_view.hpp"
+#include "gui/numeric_widgets.hpp"
 #include "cfd/oblique_shock.hpp"
 #include <iostream>
 #include <cmath>
@@ -189,21 +190,21 @@ void CFDView::drawControlPanel() {
     ImGui::Text("Flow Parameters:");
 
     float mInf = (float)m_machInf;
-    if (ImGui::SliderFloat("Inflow Mach M_inf", &mInf, 1.2f, 5.0f, "M = %.2f")) {
+    if (sliderFloatExact("Inflow Mach M_inf", &mInf, 1.2f, 5.0f, "M = %.2f", "%.2f")) {
         m_machInf = mInf;
         resetSimulation();
     }
 
     float rampDeg = (float)m_rampAngleDeg;
-    if (ImGui::SliderFloat("Wedge Ramp θ", &rampDeg, 5.0f, 25.0f, "θ = %.1f°")) {
+    if (sliderFloatExact("Wedge Ramp θ", &rampDeg, 5.0f, 25.0f, "θ = %.1f°", "%.1f")) {
         m_rampAngleDeg = rampDeg;
         resetSimulation();
     }
 
-    ImGui::SliderInt("Substeps/Frame", &m_substepsPerFrame, 1, 30);
+    sliderIntExact("Substeps/Frame", &m_substepsPerFrame, 1, 30);
 
     float cflVal = (float)m_cfl;
-    if (ImGui::SliderFloat("CFL Number", &cflVal, 0.1f, 0.8f, "CFL = %.2f")) {
+    if (sliderFloatExact("CFL Number", &cflVal, 0.1f, 0.8f, "CFL = %.2f", "%.2f")) {
         m_cfl = cflVal;
         if (m_solver) m_solver->setCfl(m_cfl);
     }

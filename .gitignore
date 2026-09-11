@@ -34,6 +34,7 @@ Makefile
 panel_layout.txt
 
 satellite_model.txt
+music_volume.txt
 
 # Local UI state and capture output
 imgui.ini
@@ -48,3 +49,7 @@ local/
 # Retain intentional documentation and UI images
 !assets/**/*.png
 !docs/images/**/*.png
+
+# Discovered modes and local executable backups
+research_mode_unlocked.txt
+*.exe.old
