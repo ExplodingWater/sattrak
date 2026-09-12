@@ -81,7 +81,7 @@ int main(int argc, char** argv) {
     int smokeFrame = 0;
     bool smokeFailed = false;
     std::cout << "========================================================\n";
-    std::cout << "  Dynamics & Supersonic CFD                             \n";
+    std::cout << "  sattrak                             \n";
     std::cout << "========================================================\n";
 
     if (!glfwInit()) {
@@ -100,7 +100,7 @@ int main(int argc, char** argv) {
     int windowWidth = 1600;
     int windowHeight = 940;
     GLFWwindow* window = glfwCreateWindow(windowWidth, windowHeight,
-        "Dynamics & Supersonic CFD", NULL, NULL);
+        "sattrak", NULL, NULL);
 
     if (!window) {
         std::cerr << "CRITICAL ERROR: Failed to create GLFW window.\n";

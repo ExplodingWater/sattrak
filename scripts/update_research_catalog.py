@@ -8,7 +8,7 @@ def main():
     satellites={};groups={};sources=[]
     for group in ('science','resource','weather'):
         url=f'https://celestrak.org/NORAD/elements/gp.php?GROUP={group}&FORMAT=tle'
-        req=urllib.request.Request(url,headers={'User-Agent':'sattrack/1.0 catalog refresh'})
+        req=urllib.request.Request(url,headers={'User-Agent':'sattrak/1.0 catalog refresh'})
         with urllib.request.urlopen(req,timeout=45) as response: raw=response.read(4000000).decode('ascii')
         lines=[line.rstrip() for line in raw.splitlines() if line.strip()]
         if len(lines)%3: raise ValueError('Invalid TLE response for '+group)

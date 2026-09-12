@@ -37,7 +37,7 @@ Clair de lune was mentioned earlier but was not included in this list; keep it a
 
 ## Preliminary rights/source check
 
-Permission to use the six listed 2003 Toyota Corolla tracks in sattrack was received directly from Haylee by email. Haylee stated that the tracks contain extremely transformed samples derived from Nintendo system music and authorized their use while sattrack remains under the MIT license. That permission covers Haylee's rights; Nintendo has not separately cleared the underlying samples. Preserve the original email privately as the permission record. No permission to bundle the other listed recordings has been established.
+Permission to use the six listed 2003 Toyota Corolla tracks in sattrak was received directly from Haylee by email. Haylee stated that the tracks contain extremely transformed samples derived from Nintendo system music and authorized their use while sattrak remains under the MIT license. That permission covers Haylee's rights; Nintendo has not separately cleared the underlying samples. Preserve the original email privately as the permission record. No permission to bundle the other listed recordings has been established.
 
 - C418: [official Volume Alpha release](https://c418.bandcamp.com/album/minecraft-volume-alpha) lists all rights reserved.
 - Lloyd Vaan: [Present](https://lloydvaan.bandcamp.com/track/present) and [Hello, world](https://lloydvaan.bandcamp.com/track/hello-world) list all rights reserved. [Lens Flare](https://music.amazon.in/albums/B09HV1R9XL) includes Watching planes take off; [Peony / Kernel Hope](https://music.amazon.com/albums/B0BZZMCQFY) identifies the release. No app redistribution permission found.

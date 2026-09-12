@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(DynamicsCFD VERSION 1.0.0 LANGUAGES C CXX DESCRIPTION "Spacecraft Dynamics and Supersonic CFD Simulation")
+project(sattrak VERSION 1.0.0 LANGUAGES C CXX DESCRIPTION "Spacecraft Dynamics and Supersonic CFD Simulation")
 
 # Require modern C++20 standard
 set(CMAKE_CXX_STANDARD 20)
@@ -48,15 +48,14 @@ set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
 add_subdirectory(external/glfw)
 
 file(GLOB SGP4_SOURCES CONFIGURE_DEPENDS external/sgp4/*.cc)
-add_library(sattrack_sgp4 STATIC ${SGP4_SOURCES})
-target_include_directories(sattrack_sgp4 PUBLIC external/sgp4)
+add_library(sattrak_sgp4 STATIC ${SGP4_SOURCES})
+target_include_directories(sattrak_sgp4 PUBLIC external/sgp4)
 
 set(GUI_SOURCES
     src/gui/main_gui.cpp
     src/gui/gl_util.cpp
     src/gui/satellite_model.cpp
     src/gui/research_catalog.cpp
-    src/gui/music_player.cpp
     src/gui/music_player.cpp
     src/gui/adcs_view.cpp
     src/gui/cfd_view.cpp
@@ -85,11 +84,10 @@ target_include_directories(ag SYSTEM PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/external/implot
     ${CMAKE_CURRENT_SOURCE_DIR}/external/stb
     ${CMAKE_CURRENT_SOURCE_DIR}/external/miniaudio
-    ${CMAKE_CURRENT_SOURCE_DIR}/external/miniaudio
 )
 
 target_link_libraries(ag PRIVATE
-    sattrack_sgp4
+    sattrak_sgp4
     glfw
     OpenGL::GL
 )

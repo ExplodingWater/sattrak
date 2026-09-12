@@ -6,7 +6,7 @@ Album: *2003 Toyota Corolla*
 
 Included tracks: **2003 Toyota Corolla**, **2004 Toyota Corolla**, **2005 Toyota Corolla**, **2006 Toyota Corolla**, **2007 Toyota Corolla**, and **2009 Toyota Corolla**.
 
-Used in sattrack with permission granted directly to Martin by Haylee by email. These recordings are not covered by the MIT license for sattrack's software. No general MIT grant or unrestricted sublicense for the music is implied.
+Used in sattrak with permission granted directly to Martin by Haylee by email. These recordings are not covered by the MIT license for sattrak's software. No general MIT grant or unrestricted sublicense for the music is implied.
 
 Haylee disclosed that these tracks contain transformed samples of Nintendo system music. Her permission covers her rights; separate permission from Nintendo has not been obtained. This record does not assert a legal determination of fair use. The original correspondence is retained privately by Martin.
 

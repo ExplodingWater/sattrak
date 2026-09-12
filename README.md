@@ -1,4 +1,4 @@
-# sattrack
+# sattrak
 
 A C++20 aerospace simulation project with a spacecraft attitude estimator/controller,
 a two-dimensional compressible Euler solver, and an interactive OpenGL studio.
@@ -22,7 +22,7 @@ chosen GLFW window system; an X11 build can use:
 
 Clone with dependencies:
 
-    git clone --recurse-submodules https://github.com/ExplodingWater/sattrack.git
+    git clone --recurse-submodules https://github.com/ExplodingWater/sattrak.git
 
 For an existing clone, run `git submodule update --init --recursive`.
 
