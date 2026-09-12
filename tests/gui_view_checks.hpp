@@ -24,7 +24,7 @@ struct ADCSViewChecks {
             view.selectModel(1);
             view.setRealScale(true);
             view.m_satelliteSpeedFactor = 1;
-            view.m_orbitAltitudeKm=75;
+            view.m_orbitAltitudeKm=23;
             view.m_entryPreview=true;
             view.m_descentKmS=0;
             view.m_alarmMuted=true;
@@ -121,6 +121,11 @@ struct ADCSViewChecks {
             if(history.m_trail.size()>65536 || (history.m_trail.front().position-first).norm()!=0 || history.m_showTrail)return false;
             history.m_satPosECI={20,0,0};history.recordTrail();
             if(!history.m_trail.back().start)return false;
+            history.setRealScale(true);
+            if(history.m_trail.size()!=1 || history.m_trailInterval!=1 || history.m_nextTrailTime!=history.m_simTimeSec+1)return false;
+            history.m_trail.push_back({{25,0,0},false});
+            history.setRealScale(false);
+            if(history.m_trail.size()!=1)return false;
         }
         const auto oldState = view.m_satState.q;
         const double oldTime = view.m_simTimeSec;

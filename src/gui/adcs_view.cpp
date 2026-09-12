@@ -658,6 +658,10 @@ void ADCSView::render3D(int width, int height) {
     if (std::abs(m_cameraForward.dot(camUp.normalized())) > 0.999)
         camUp = std::abs(m_cameraForward[1]) < 0.9 ? aero::math::Vec3(0,1,0) : aero::math::Vec3(1,0,0);
     m_cameraUp = m_cameraForward.cross(camUp).normalized().cross(m_cameraForward).normalized();
+    // World units are ~531 km: a fixed 0.1 near plane cut away nearby Earth.
+    const float nearEarth = float(std::clamp((camEye.norm()-EARTH_RADIUS_3D)*0.05, 1e-6, 0.1));
+    proj = Mat4::perspective(45.0f * 3.14159265f / 180.0f, aspect, nearEarth,
+        float(std::max(1000.0, camEye.norm()+2*EARTH_RADIUS_3D)));
     Mat4 view = Mat4::lookAt(camEye, camTarget, camUp);
     Mat4 viewProj = Mat4::multiply(proj, view);
 
@@ -815,6 +819,10 @@ double ADCSView::spacecraftScale() const {
 void ADCSView::setRealScale(bool enabled) {
     if (enabled == m_realScale) return;
     m_realScale = enabled;
+    m_trail={{m_satPosECI,true}};
+    m_previousTrailPosition=m_satPosECI;
+    m_trailInterval=1;
+    m_nextTrailTime=m_simTimeSec+1;
     if (enabled) {
         m_savedTimeWarp = m_timeWarp;
         m_timeWarp = 1;
@@ -1144,7 +1152,7 @@ void ADCSView::drawFlightOverlay() {
     if (!m_realScale) return;
     const auto display = ImGui::GetIO().DisplaySize;
     if (display.x < 100 || display.y < 100) return;
-    auto* draw = ImGui::GetForegroundDrawList();
+    auto* draw = ImGui::GetBackgroundDrawList();
     const auto delta = m_satPosECI - m_cameraEye;
     const auto right = m_cameraForward.cross(m_cameraUp);
     double x = delta.dot(right), y = delta.dot(m_cameraUp), z = delta.dot(m_cameraForward);
