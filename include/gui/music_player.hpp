@@ -20,6 +20,9 @@ public:
     void togglePause();
     void next();
     void setVolumePercent(int percent);
+    double durationSeconds() const;
+    double elapsedSeconds() const;
+    void seekSeconds(double seconds);
 
     bool hasTracks() const;
     bool isPlaying() const;

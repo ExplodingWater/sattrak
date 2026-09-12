@@ -15,6 +15,7 @@
 #include "gui/adcs_view.hpp"
 #include "gui/cfd_view.hpp"
 #include "gui/music_player.hpp"
+#include "gui/music_icons.hpp"
 #include "../../tests/gui_view_checks.hpp"
 
 void applyStealthAerospaceTheme() {
@@ -208,29 +209,42 @@ int main(int argc, char** argv) {
             ImGui::TextColored(ImVec4(0.22f, 0.74f, 0.97f, 1.0f), "Simulation");
             ImGui::TextDisabled("|");
 
-            if (ImGui::MenuItem(io.DisplaySize.x < 1200 ? " [1] ORBITAL GNC " : " [1] 3D ORBITAL GNC & SATELLITE TRACKING ", nullptr, activeStudioTab == 0)) {
+            if (ImGui::MenuItem(io.DisplaySize.x < 1700 ? " [1] ORBITAL GNC " : " [1] 3D ORBITAL GNC & SATELLITE TRACKING ", nullptr, activeStudioTab == 0)) {
                 activeStudioTab = 0;
             }
-            if (ImGui::MenuItem(io.DisplaySize.x < 1200 ? " [2] CFD " : " [2] SUPERSONIC CFD SHOCK EXPLORER ", nullptr, activeStudioTab == 1)) {
+            if (ImGui::MenuItem(io.DisplaySize.x < 1700 ? " [2] CFD " : " [2] SUPERSONIC CFD SHOCK EXPLORER ", nullptr, activeStudioTab == 1)) {
                 activeStudioTab = 1;
             }
 
             ImGui::TextDisabled("|");
             ImGui::BeginDisabled(!musicPlayer.hasTracks());
-            if (ImGui::SmallButton("|<##music_previous")) musicPlayer.previous();
+            if (gui::musicIconButton("##music_previous",gui::MusicIcon::Previous)) musicPlayer.previous();
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal | ImGuiHoveredFlags_NoSharedDelay))
                 ImGui::SetTooltip("Restart the current song after three seconds, or skip to the previous song near its beginning.");
             ImGui::SameLine();
-            if (ImGui::SmallButton(musicPlayer.isPlaying() ? "||##music_pause" : ">##music_play")) musicPlayer.togglePause();
+            if (gui::musicIconButton("##music_play_pause",musicPlayer.isPlaying()?gui::MusicIcon::Pause:gui::MusicIcon::Play)) musicPlayer.togglePause();
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal | ImGuiHoveredFlags_NoSharedDelay))
                 ImGui::SetTooltip("Pause or continue music. Before automatic playback begins, this starts it immediately.");
             ImGui::SameLine();
-            if (ImGui::SmallButton(">|##music_next")) musicPlayer.next();
+            if (gui::musicIconButton("##music_next",gui::MusicIcon::Next)) musicPlayer.next();
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal | ImGuiHoveredFlags_NoSharedDelay))
                 ImGui::SetTooltip("Skip to the next song.");
             ImGui::EndDisabled();
             ImGui::SameLine();
-            if (io.DisplaySize.x >= 1050) {
+            const double duration=musicPlayer.durationSeconds();
+            float elapsed=float(musicPlayer.elapsedSeconds());
+            const int seconds=int(elapsed);
+            ImGui::Text("%d:%02d",seconds/60,seconds%60);
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(io.DisplaySize.x<1200?90:160);
+            ImGui::BeginDisabled(duration<=0);
+            if(ImGui::SliderFloat("##music_seek",&elapsed,0,float(duration),"",ImGuiSliderFlags_AlwaysClamp))musicPlayer.seekSeconds(elapsed);
+            ImGui::EndDisabled();
+            ImGui::SameLine();
+            const int remaining=int(std::ceil(std::max(0.0,duration-elapsed)));
+            ImGui::Text("-%d:%02d",remaining/60,remaining%60);
+            ImGui::SameLine();
+            if (io.DisplaySize.x >= 1500) {
                 ImGui::TextDisabled("%.22s", musicPlayer.displayText().c_str());
                 ImGui::SameLine();
             }

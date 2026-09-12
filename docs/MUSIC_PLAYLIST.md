@@ -8,7 +8,7 @@ This is the user's requested list, in supplied order. Only the six agreed 2003 T
 - Start 45–60 seconds after opening ag.exe.
 - Fade in the first song.
 - Always fade in Joakuim's **End of the winter**, including when reached by skipping or restarting, regardless of playlist position. Fade duration is not yet specified.
-- Top player bar: restart/previous, pause/resume, end/next. No time bar or seek slider.
+- Top player bar: restart/previous, pause/resume, end/next. Seek slider with elapsed and remaining time.
 - The Kane Parsons track is tentative; exclude it from the default playlist until confirmed.
 
 ## Requested tracks

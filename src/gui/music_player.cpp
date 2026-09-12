@@ -6,6 +6,7 @@
 #include <cctype>
 #include <fstream>
 #include <random>
+#include <cmath>
 
 namespace gui {
 namespace {
@@ -114,6 +115,23 @@ void MusicPlayer::togglePause() {
     m_impl->paused=!m_impl->paused;
 }
 void MusicPlayer::next(){if(!m_impl->tracks.empty())m_impl->begin(m_impl->index+1,false,m_impl->wallTime);}
+double MusicPlayer::durationSeconds() const {
+    float seconds=0;
+    if(m_impl->soundReady)ma_sound_get_length_in_seconds(&m_impl->sound,&seconds);
+    return seconds;
+}
+double MusicPlayer::elapsedSeconds() const {
+    float seconds=0;
+    if(m_impl->soundReady)ma_sound_get_cursor_in_seconds(&m_impl->sound,&seconds);
+    return seconds;
+}
+void MusicPlayer::seekSeconds(double seconds) {
+    if(!m_impl->soundReady || !std::isfinite(seconds))return;
+    ma_uint32 rate=0;
+    ma_sound_get_data_format(&m_impl->sound,nullptr,nullptr,&rate,nullptr,0);
+    const auto frame=ma_uint64(std::clamp(seconds,0.0,(std::max)(0.0,durationSeconds()-0.001))*rate);
+    ma_sound_seek_to_pcm_frame(&m_impl->sound,frame);
+}
 void MusicPlayer::setVolumePercent(int percent){m_impl->volume=std::clamp(percent,0,200);m_impl->applyVolume(m_impl->wallTime);}
 bool MusicPlayer::hasTracks() const{return !m_impl->tracks.empty();}
 bool MusicPlayer::isPlaying() const{return m_impl->soundReady&&!m_impl->paused;}
