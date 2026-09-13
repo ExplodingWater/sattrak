@@ -3,6 +3,7 @@
 #include <cstring>
 #include <cstdint>
 #include <algorithm>
+#include <filesystem>
 
 namespace gui {
 bool SatelliteModel::load(const std::string& path) {
@@ -12,9 +13,10 @@ bool SatelliteModel::load(const std::string& path) {
     in.seekg(0);
     auto read = [&](auto& value) { return bool(in.read(reinterpret_cast<char*>(&value), sizeof(value))); };
     char magic[8]; uint32_t count = 0;
-    if (!in.read(magic,8) || std::memcmp(magic,"AEROMDL1",8) || !read(count) || !read(radius)
+    if (!in.read(magic,8) || (std::memcmp(magic,"AEROMDL1",8) && std::memcmp(magic,"AEROMDL2",8)) || !read(count) || !read(radius)
         || count == 0 || count > 128 || !std::isfinite(radius) || radius <= 0 || radius > 10000) return false;
-    struct Pending { ModelPart part; std::vector<Vertex> vertices; std::vector<unsigned int> indices; };
+    const bool textured=magic[7]=='2';
+    struct Pending { ModelPart part; std::string texture; std::vector<Vertex> vertices; std::vector<unsigned int> indices; };
     std::vector<Pending> pending(count);
     size_t total = 0;
     static_assert(sizeof(Vertex) == 8*sizeof(float));
@@ -22,6 +24,14 @@ bool SatelliteModel::load(const std::string& path) {
     for (auto& p : pending) {
         uint32_t nv = 0, ni = 0;
         if (!read(p.part.color) || !read(p.part.roughness) || !read(nv) || !read(ni)) return false;
+        if(textured) {
+            uint32_t length=0;
+            if(!read(length) || length>128)return false;
+            p.texture.resize(length);
+            if(!in.read(p.texture.data(),length))return false;
+            if(p.texture.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.")!=std::string::npos
+                || p.texture.find("..")!=std::string::npos)return false;
+        }
         if (nv == 0 || nv > 1000000 || ni == 0 || ni > 3000000 || ni % 3) return false;
         total += size_t(nv)*sizeof(Vertex) + size_t(ni)*sizeof(unsigned int);
         if (total > 64*1024*1024) return false;
@@ -40,6 +50,12 @@ bool SatelliteModel::load(const std::string& path) {
     if (in.peek() != std::char_traits<char>::eof()) return false;
     // Validate the complete file before allocating any GPU resources.
     for (auto& p : pending) {
+        if(!p.texture.empty()) {
+            p.part.texture=loadTextureFromFile((std::filesystem::path(path).parent_path()/p.texture).string());
+            if(!p.part.texture){cleanup();return false;}
+            glBindTexture(GL_TEXTURE_2D,p.part.texture);
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_REPEAT);
+        }
         for (size_t i=0; i<p.indices.size(); i+=3) {
             auto point = [&](unsigned j) { const auto& v=p.vertices[j]; return aero::math::Vec3(v.x,v.y,v.z); };
             auto a=point(p.indices[i]), b=point(p.indices[i+1]), c=point(p.indices[i+2]);
@@ -52,16 +68,19 @@ bool SatelliteModel::load(const std::string& path) {
     return true;
 }
 void SatelliteModel::draw(const ShaderProgram& shader) const {
-    shader.setInt("uUseTexture",0);
     for (const auto& p : parts) {
+        shader.setInt("uUseTexture",p.texture!=0);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D,p.texture);
         shader.setVec4("uColor",p.color[0],p.color[1],p.color[2],p.color[3]);
         shader.setFloat("uRoughness",p.roughness);
         p.mesh.draw();
     }
     shader.setFloat("uRoughness",0.5f);
+    shader.setInt("uUseTexture",0);
 }
 void SatelliteModel::cleanup() {
-    for (auto& p : parts) p.mesh.cleanup();
+    for (auto& p : parts) {p.mesh.cleanup();if(p.texture)glDeleteTextures(1,&p.texture);}
     parts.clear(); facets.clear(); radius = 1;
 }
 }

@@ -7,6 +7,11 @@
 #include "imgui_internal.h"
 #include "glad/glad.h"
 #include <GLFW/glfw3.h>
+#ifdef _WIN32
+#define NOMINMAX
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
+#endif
 #include "imgui.h"
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_opengl3.h"
@@ -17,6 +22,8 @@
 #include "gui/music_player.hpp"
 #include "gui/music_icons.hpp"
 #include "../../tests/gui_view_checks.hpp"
+
+static bool exitDialogClosed=false;
 
 void applyStealthAerospaceTheme() {
     ImGuiStyle& style = ImGui::GetStyle();
@@ -72,7 +79,11 @@ void applyStealthAerospaceTheme() {
 }
 
 int main(int argc, char** argv) {
-    const bool smokeTest = argc > 1 && std::strcmp(argv[1], "--smoke-test") == 0;
+    const bool multiSmoke = argc > 1 && std::strcmp(argv[1], "--multiview-smoke-test") == 0;
+    const bool modelSmoke = argc > 1 && std::strcmp(argv[1], "--models-smoke-test") == 0;
+    const bool orbitSmoke = argc > 1 && std::strcmp(argv[1], "--orbit-smoke-test") == 0;
+    const bool startupSmoke = argc > 1 && std::strcmp(argv[1], "--startup-smoke-test") == 0;
+    const bool smokeTest = startupSmoke || orbitSmoke || multiSmoke || modelSmoke || (argc > 1 && std::strcmp(argv[1], "--smoke-test") == 0);
     if (!std::filesystem::exists("earth_texture.jpg")) {
         auto executableDir = std::filesystem::absolute(argv[0]).parent_path();
         if (std::filesystem::exists(executableDir / "earth_texture.jpg"))
@@ -144,6 +155,20 @@ int main(int argc, char** argv) {
         return 1;
     }
     glfwSetWindowUserPointer(window,&adcsView);
+    if(!smokeTest){
+        adcsView.initInternetChoice();
+        glfwSetWindowCloseCallback(window,[](GLFWwindow* w){
+#ifdef _WIN32
+            auto* view=static_cast<gui::ADCSView*>(glfwGetWindowUserPointer(w));
+            if(view)view->suspendAudio();
+            const wchar_t* message=view&&view->hasActivePathRecording()
+                ? L"You're currently recording your satellite path. Closing sattrak will discard this session's unsaved path. Confirm exit?"
+                : L"Are you sure you want to close?";
+            glfwSetWindowShouldClose(w,MessageBoxW(glfwGetWin32Window(w),message,L"sattrak",MB_YESNO|MB_ICONWARNING|MB_DEFBUTTON2)==IDYES);
+            exitDialogClosed=true;
+#endif
+        });
+    }
     glfwSetKeyCallback(window,[](GLFWwindow* w,int key,int scancode,int action,int mods){
         ImGui_ImplGlfw_KeyCallback(w,key,scancode,action,mods);
         auto* view=static_cast<gui::ADCSView*>(glfwGetWindowUserPointer(w));
@@ -161,6 +186,7 @@ int main(int argc, char** argv) {
 
     gui::MusicPlayer musicPlayer;
     musicPlayer.init("assets/music");
+    musicPlayer.initRadio("assets/radio");
     if (smokeTest) {
         musicPlayer.setVolumePercent(250);
         smokeFailed |= musicPlayer.volumePercent() != 200;
@@ -178,11 +204,14 @@ int main(int argc, char** argv) {
 
     // Main Simulation & Rendering Loop
     while (!glfwWindowShouldClose(window)) {
-        if (smokeTest && smokeFrame == 4) glfwSetWindowSize(window, 900, 1100);
-        if (smokeTest && smokeFrame == 8) glfwSetWindowSize(window, 2400, 800);
+        if (modelSmoke && smokeFrame == 0) glfwSetWindowSize(window, 1920, 1080);
+        if (smokeTest && !modelSmoke && smokeFrame == 4) glfwSetWindowSize(window, 900, 1100);
+        if (smokeTest && !modelSmoke && smokeFrame == 8) glfwSetWindowSize(window, 2400, 800);
         glfwPollEvents();
 
         double currentTime = glfwGetTime();
+        if(exitDialogClosed){lastTime=currentTime;exitDialogClosed=false;}
+        if(glfwWindowShouldClose(window))break;
         float dt = (float)(currentTime - lastTime);
         lastTime = currentTime;
         // Preserve wall-clock time: 1:1 mode must not slow down on long frames.
@@ -196,6 +225,8 @@ int main(int argc, char** argv) {
             io.AddMousePosEvent(smokeFrame < 3 ? io.DisplaySize.x-100 : io.DisplaySize.x/2, 100);
         }
         ImGui::NewFrame();
+        if(smokeTest&&smokeFrame==0)smokeFailed |= !gui::ADCSViewChecks::checkDataFallback(adcsView);
+        if(startupSmoke&&smokeFrame==0)gui::ADCSViewChecks::showStartupChoice(adcsView);
         musicPlayer.update(currentTime);
 
         // Top Command Bar (Tab Selector)
@@ -261,6 +292,19 @@ int main(int argc, char** argv) {
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal | ImGuiHoveredFlags_NoSharedDelay))
                 ImGui::SetTooltip("Exact music volume percentage. Enter any whole number from 0 to 200; values above 100 amplify and may clip.");
 
+            if(ImGui::BeginMenu("Radio")) {
+                bool enabled=musicPlayer.radioEnabled();
+                if(ImGui::MenuItem("Occasional radio",nullptr,&enabled))musicPlayer.setRadioEnabled(enabled);
+                ImGui::TextDisabled("Fixed volume: 10%% | fade-in: 5 seconds");
+                ImGui::TextDisabled("45-120 minutes between recordings");
+                if(enabled&&!musicPlayer.radioPlaying())ImGui::Text("Next in %.0f min",musicPlayer.secondsUntilRadio()/60);
+                ImGui::TextWrapped("%s",musicPlayer.radioStatus().c_str());
+                ImGui::BeginDisabled(!enabled);
+                if(ImGui::MenuItem("Play next recording now"))musicPlayer.playRadioNow();
+                ImGui::EndDisabled();
+                if(ImGui::MenuItem("Stop recording",nullptr,false,musicPlayer.radioPlaying()))musicPlayer.stopRadio();
+                ImGui::EndMenu();
+            }
             const float fpsX=ImGui::GetWindowWidth()-160;
             if(ImGui::GetCursorPosX()<fpsX) {
                 ImGui::SameLine(fpsX);
@@ -278,17 +322,19 @@ int main(int argc, char** argv) {
             glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Deep Space Black
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-            if (smokeTest) gui::ADCSViewChecks::prepareFrame(adcsView, smokeFrame);
+            if(orbitSmoke)gui::ADCSViewChecks::prepareOrbitFrame(adcsView,smokeFrame);
+            else if(multiSmoke)gui::ADCSViewChecks::prepareMultiFrame(adcsView,smokeFrame);
+            else if(modelSmoke)gui::ADCSViewChecks::prepareModelFrame(adcsView,smokeFrame);
+            else if (smokeTest && !startupSmoke) gui::ADCSViewChecks::prepareFrame(adcsView, smokeFrame);
             adcsView.update(dt);
             if (smokeTest && smokeFrame >= 8) {
                 ImGui::SetScrollY(ImGui::FindWindowByName("Flight Director & Camera"), 650);
             }
             adcsView.drawUI();
-            if (smokeTest) smokeFailed |= !gui::ADCSViewChecks::checkRouting(adcsView, smokeFrame);
-            adcsView.handleInput(window, dt);
-            adcsView.render3D(windowWidth, windowHeight);
-            adcsView.drawFlightOverlay();
+            if (smokeTest && !startupSmoke && !orbitSmoke && !modelSmoke && !multiSmoke) smokeFailed |= !gui::ADCSViewChecks::checkRouting(adcsView, smokeFrame);
+            adcsView.renderViews(window,dt);
         } else {
+            adcsView.closeDesktopViews();
             adcsView.suspendAudio();
             // Render CFD Studio
             glClearColor(0.02f, 0.03f, 0.06f, 1.0f);

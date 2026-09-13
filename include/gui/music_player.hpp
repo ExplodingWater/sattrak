@@ -15,6 +15,15 @@ public:
     MusicPlayer& operator=(const MusicPlayer&) = delete;
 
     bool init(const std::filesystem::path& musicFolder);
+    bool initRadio(const std::filesystem::path& folder);
+    void setRadioEnabled(bool enabled);
+    bool radioEnabled() const;
+    bool radioPlaying() const;
+    float radioGain() const;
+    double secondsUntilRadio() const;
+    const std::string& radioStatus() const;
+    void playRadioNow();
+    void stopRadio();
     void update(double wallTimeSeconds);
     void previous();
     void togglePause();

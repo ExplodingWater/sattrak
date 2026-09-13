@@ -56,8 +56,12 @@ set(GUI_SOURCES
     src/gui/gl_util.cpp
     src/gui/satellite_model.cpp
     src/gui/research_catalog.cpp
+    src/gui/catalog_updates.cpp
     src/gui/music_player.cpp
     src/gui/adcs_view.cpp
+    src/gui/multi_view.cpp
+    src/gui/orbit_replay.cpp
+    src/gui/orbit_controls.cpp
     src/gui/cfd_view.cpp
     external/glad/src/glad.c
     external/imgui/imgui.cpp
@@ -97,7 +101,7 @@ elseif(APPLE)
     target_link_libraries(ag PRIVATE "-framework CoreFoundation" "-framework CoreAudio" "-framework AudioToolbox")
 endif()
 if(WIN32)
-    target_link_libraries(ag PRIVATE winmm)
+    target_link_libraries(ag PRIVATE winmm comdlg32 winhttp)
 endif()
 add_custom_command(TARGET ag POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -125,4 +129,15 @@ target_include_directories(test_cfd PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 add_test(NAME Test_CFD_Shock COMMAND test_cfd)
 add_executable(test_regressions tests/test_regressions.cpp)
 add_test(NAME Test_Numerical_Regressions COMMAND test_regressions)
+add_executable(test_orbit_replay tests/test_orbit_replay.cpp src/gui/orbit_replay.cpp)
+add_test(NAME Test_Orbit_Replay COMMAND test_orbit_replay "${CMAKE_CURRENT_SOURCE_DIR}/assets/orbits")
+if(BUILD_GUI)
+    add_executable(test_radio_player tests/test_radio_player.cpp src/gui/music_player.cpp)
+    target_include_directories(test_radio_player SYSTEM PRIVATE external/miniaudio)
+    if(UNIX AND NOT APPLE)
+        target_link_libraries(test_radio_player PRIVATE ${CMAKE_DL_LIBS} pthread m)
+    elseif(APPLE)
+        target_link_libraries(test_radio_player PRIVATE "-framework CoreFoundation" "-framework CoreAudio" "-framework AudioToolbox")
+    endif()
+endif()
 endif()

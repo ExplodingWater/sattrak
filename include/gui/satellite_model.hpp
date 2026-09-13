@@ -7,6 +7,7 @@ struct ModelPart {
     Mesh mesh;
     std::array<float,4> color{};
     float roughness = 1;
+    unsigned int texture = 0;
 };
 struct AeroFacet { aero::math::Vec3 center, normal; double area; };
 class SatelliteModel {

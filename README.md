@@ -210,6 +210,17 @@ and run `scripts/bake_landsat8.py` with Python. The original GLB is retained.
 Landsat 8 uses a uniform `(0.3, 0.3, 0.3)` model scale in non-1:1 views.
 Its physical-scale geometry in 1:1 mode is unchanged.
 
+Settings > **Satellite model** also offers **Hubble Space Telescope**, **Terra**,
+**GOES-R**, and the **International Space Station**, alongside Low poly and Landsat 8.
+Selection is remembered locally. Models include NASA geometry, available base-color
+textures, and automatic camera framing; large spacecraft are reduced in overview mode.
+The 1:1 view preserves meter-scale geometry. Terra's inconsistent source units are
+calibrated to its published 6.8 m bus length; its two missing upstream textures use
+source material colors. Credits, source files, and conversion records are under
+`assets/models/`. Rebuild the four new meshes with `python scripts/bake_spacecraft.py`
+(requires NumPy and Pillow). Model choice changes geometry, including the entry-preview
+surface estimate, but does not change mass, inertia, controllers, or orbital elements.
+
 ## Atmospheric entry preview
 
 Camera & simulation settings includes an atmospheric-entry preview with altitude and descent controls. Windward spacecraft surfaces emit a glow and downstream wake based on approximate atmospheric heating. A flashing telemetry warning includes a mute/unmute button for the generated Windows alarm. See [model assumptions and limitations](docs/REENTRY.md).
@@ -229,3 +240,23 @@ Earth geometry uses two automatic distance levels. The existing 128 x 192 sphere
 The top music bar plays local MP3, WAV, Ogg Vorbis and FLAC files from `assets/music` in filename order. Automatic playback starts after a randomized 45-60 second delay and fades in the first track. Previous/restart, pause/resume and next controls use Feather vector icons, with a seek bar showing elapsed and remaining time. Volume accepts both slider input and an exact integer from 0-200%, and is remembered locally. Audio files retain their own rights and are not covered by the source code's MIT license.
 
 Every adjustable slider has an exact numeric entry box beside it. Typed values are clamped to the same safe range as the slider.
+
+### Orbit replay, expert controls, and radio recordings
+
+At first launch, choose optional internet updates or offline prediction. Settings can change this choice later. Online mode downloads and validates CelesTrak's science, resource and weather TLE catalogs in the background; failed requests retain the cached or bundled catalog. Checks are limited to once per two hours across restarts. Prediction begins at session UTC and advances with simulation time. This refreshes the research catalog, not the user-controlled spacecraft or imported replay. TLE format currently covers only supported five-digit NORAD IDs. Preferences and downloaded snapshots stay in ignored `local/` storage.
+
+On Windows, Alt+F4 and the main close button ask for confirmation with a native Yes/No dialog. When a visible simulated satellite trail contains history, the message warns that its unsaved session data will be discarded. Cancelling resumes without integrating the time spent in the dialog. Music startup and between-song silence no longer display placeholder text.
+
+Flight Director & Camera opens a recorded-orbit importer with play/pause, seeking, playback speed, trajectory history, station visibility, comparison against a second ephemeris, and CSV report export. [Supported formats and synthetic examples](assets/orbits/README.md) cover CSV and single-segment CCSDS OEM text.
+
+Settings includes expert controls for spacecraft mass and principal inertia, reaction-wheel torque and momentum, pointing slew limits, integration step, gravity-gradient torque, sensor noise and bias, and station elevation mask. Optional numerical orbit propagation uses RK4 with selectable J2 and atmospheric drag; drag has configurable area, coefficient and density multiplier. Density is an approximate altitude table, not a weather-driven atmosphere model. These controls are session settings and illustrative physical models, not validated mission parameters. Imported replay trajectories remain controlled by their files.
+
+The Radio menu provides occasional recorded amateur contacts and Morse reception. Each event plays one clip, fading in over five seconds to a fixed 10% gain independent of music volume. Events are separated by a random 45–120 minutes; the menu can disable, stop or manually start them. These are recordings, not a live receiver. The six clips use CC0; see [recording credits](assets/radio/CREDITS.md). ISS recordings are not included pending permission.
+
+### Camera views and quiet playback
+
+Multi View beside Camera Perspectives provides 1–8 independent numbered cameras, either bordered tiles or separate desktop windows. Turn it off to return to View 1. More views increase GPU load. Satellite Orbit can approach 0.25 meters from the spacecraft center in physical scale; entering model geometry is possible.
+
+Physical-scale targeting uses a conservative acceleration-limited attitude slew (0.25 degrees/s; Hubble 0.1 degrees/s), with a yellow estimated countdown on the selected station. Settings offers a quick-reposition override. These are illustrative controller limits, not validated spacecraft parameters; the ETA is for pointing, not the next unobstructed ground pass. Existing angular momentum can take time to settle.
+
+Natural track endings now have randomized 90–180 second silence before the next song fades in. Play or Next skips the silence; Previous restarts the finished song.

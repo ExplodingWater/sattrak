@@ -12,6 +12,9 @@
 #include "gui/gl_util.hpp"
 #include "gui/satellite_model.hpp"
 #include "gui/research_catalog.hpp"
+#include "gui/orbit_replay.hpp"
+#include <random>
+#include <future>
 
 namespace gui {
 
@@ -66,12 +69,19 @@ public:
     ~ADCSView();
 
     bool init();
+    void initInternetChoice();
+    void drawInternetChoice();
+    void drawInternetSettings();
+    void startCatalogRefresh();
+    bool hasActivePathRecording() const { return m_showTrail && !m_replayActive && m_trail.size()>1; }
     void handleInput(GLFWwindow* window, float dt);
     void update(float dt);
     void secretKey(int key, int action, bool typing);
     void drawDiscoveryAlert();
     void suspendAudio() { updateAlarm(false); }
     void render3D(int width, int height);
+    void renderViews(GLFWwindow* mainWindow,float dt);
+    void closeDesktopViews();
     void drawUI();
     void drawFlightOverlay();
     void setCameraPreset(CameraPreset preset) { m_camPreset = preset; }
@@ -82,11 +92,65 @@ public:
     void onScroll(double yoffset);
 
 private:
+    int m_internetChoice=-1;
+    bool m_askInternet=false;
+    std::future<std::string> m_catalogDownload;
+    std::string m_dataStatus="Offline prediction from bundled elements";
+    struct ViewCamera {
+        CameraPreset preset=CameraPreset::SatelliteOrbit;
+        aero::math::Vec3 flyPos,flyForward,flyUp,arcCenter;
+        float satYaw=.8f,satPitch=.35f,satDistance=8,arcYaw=.8f,arcPitch=.35f,arcDistance=42;
+    };
+    struct MultiView {
+        ViewCamera camera;
+        unsigned framebuffer=0,texture=0,depth=0,desktopFramebuffer=0;
+        int width=0,height=0;
+        GLFWwindow* window=nullptr;
+        double mouseX=0,mouseY=0,scroll=0;
+        bool dragging=false,closed=false;
+    };
+    std::array<MultiView,8> m_views;
+    bool m_multiView=false,m_separateViews=false,m_viewsInitialized=false,m_renderingMulti=false;
+    int m_viewCount=2;
+    GLFWwindow* m_mainWindow=nullptr;
+    ViewCamera captureCamera() const;
+    void applyCamera(const ViewCamera& camera);
+    void enableMultiView(bool enabled);
+    void drawMultiViewControls();
+    void renderViewTexture(MultiView& view,int width,int height);
+    void moveViewCamera(MultiView& view,double dx,double dy,bool right,double wheel,GLFWwindow* window,float dt,bool keyboard);
+    void cleanupViews();
     friend struct ADCSViewChecks;
     void rotateFlycam(double dx, double dy);
     bool sceneAcceptsInput() const;
     void moveFlycam(double forward, double right, double up, bool boost, double dt);
     void drawSettings();
+    void drawOrbitReplay();
+    void drawExpertSettings();
+    bool loadReplay(const std::filesystem::path& path,bool reference=false);
+    void seekReplay(double seconds);
+    void advanceReplay(double dt);
+    void stopReplay();
+    void drawReplayComparison(const Mat4& viewProj);
+    void exportReplayReport(const std::filesystem::path& path);
+    void initializeNumericalOrbit();
+    OrbitReplay m_replay,m_reference;
+    bool m_replayActive=false,m_replayWindow=false,m_numericalOrbit=false,m_numericalReady=false;
+    bool m_gravityGradient=false,m_sensorNoise=false;
+    double m_replaySeconds=0,m_replaySavedAltitude=650,m_replaySavedSpin=0;
+    float m_replaySpeed=1,m_elevationMask=0;
+    char m_replayPath[1024]="assets/orbits/demo.oem",m_referencePath[1024]="assets/orbits/demo-comparison.oem";
+    char m_reportPath[1024]="orbit-report.csv";
+    std::string m_replayMessage,m_expertMessage;
+    OrbitSample m_numericalState,m_currentOrbit;
+    OrbitForces m_orbitForces;
+    std::vector<float> m_comparisonLine;
+    float m_inertiaValues[3]={.04f,.04f,.02f},m_mass=6,m_wheelTorque=.005f,m_wheelMomentum=.05f;
+    float m_physicsStep=.01f,m_gyroNoise=.0005f,m_biasDrift=.00005f,m_vectorNoise=.001f;
+    float m_biasValues[3]={.012f,-.015f,.010f},m_maxSlew=.25f,m_slewAcceleration=.02f;
+    bool m_customSlew=false;
+    std::mt19937 m_sensorRandom{42};
+    aero::math::Vec3 m_biasWalk;
     void drawResearchAndTrail(const Mat4& viewProj, int width, int height, bool closePass=false);
     void recordTrail();
     void updateEarthLod(double centerDistance);
@@ -125,6 +189,9 @@ private:
     float m_savedTimeWarp = 5.0f;
     double m_actualUserSpeedKmS = 0;
     SatelliteModel m_landsatModel;
+    std::array<SatelliteModel,4> m_additionalModels;
+    const SatelliteModel* selectedDetailedModel() const;
+    double overviewModelScale() const;
     int m_selectedModel = 0;
     void selectModel(int model);
     float modelFramingScale() const;
@@ -184,6 +251,8 @@ private:
     bool m_isTargetDay = true;
     double m_slewErrorDeg = 0.0;
     double m_bodyRateNormDegS = 0.0;
+    bool m_quickReposition=false;
+    double m_repositionEtaSec=0,m_pointingSettledSec=0;
 
     struct LatLonPoint { float lat, lon; };
     std::vector<LatLonPoint> m_groundTrack2D;

@@ -48,6 +48,7 @@ local/
 *.key
 # Retain intentional documentation and UI images
 !assets/**/*.png
+!assets/orbits/*.csv
 !docs/images/**/*.png
 
 # Discovered modes and local executable backups

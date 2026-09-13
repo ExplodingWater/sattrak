@@ -6,6 +6,40 @@
 namespace gui {
 // Invoked by --smoke-test while a real OpenGL context is active.
 struct ADCSViewChecks {
+    static void showStartupChoice(ADCSView& view){view.m_askInternet=true;}
+    static bool checkDataFallback(ADCSView& view) {
+        const auto count=view.m_researchCatalog.satellites.size();
+        std::promise<std::string> result;view.m_catalogDownload=result.get_future();result.set_value("ERROR: simulated offline service");
+        view.drawInternetChoice();
+        bool okay=view.m_researchCatalog.satellites.size()==count&&view.m_dataStatus.find("using saved prediction")!=std::string::npos;
+        const bool shown=view.m_showTrail,replay=view.m_replayActive;
+        view.m_showTrail=true;view.m_replayActive=false;
+        okay &= view.hasActivePathRecording()==(view.m_trail.size()>1);
+        view.m_replayActive=true;okay &= !view.hasActivePathRecording();
+        view.m_showTrail=shown;view.m_replayActive=replay;
+        return okay;
+    }
+    static void prepareOrbitFrame(ADCSView& view,int frame) {
+        if(frame==0){view.loadReplay("assets/orbits/demo.oem");view.loadReplay("assets/orbits/demo-comparison.oem",true);view.seekReplay(1200);view.m_replayWindow=true;}
+        if(frame==8)view.seekReplay(2400);
+        if(frame==12){view.stopReplay();view.m_numericalOrbit=true;view.m_orbitForces.j2=true;view.m_orbitForces.drag=true;view.m_sensorNoise=true;view.m_gravityGradient=true;view.initializeNumericalOrbit();for(int i=0;i<200;++i)view.advancePhysics(.005);}
+    }
+    static void prepareMultiFrame(ADCSView& view,int frame) {
+        if(frame==0){view.enableMultiView(true);view.m_viewCount=8;}
+        if(frame==8)view.m_separateViews=true;
+        if(frame==16){view.m_separateViews=false;view.enableMultiView(false);}
+    }
+    static void prepareModelFrame(ADCSView& view,int frame) {
+        if(frame%4!=0)return;
+        view.selectModel(2+std::min(frame/4,3));
+        view.setRealScale(frame>=16);
+        view.m_camPreset=CameraPreset::SatelliteOrbit;
+        view.m_satOrbitDistance=frame>=16?119.0f:8*view.modelFramingScale();
+        view.m_satOrbitYaw=0.7f;
+        view.m_satOrbitPitch=0.35f;
+        view.m_showResearch=false;view.m_showTrail=false;view.m_discoveryUntil=0;
+        view.m_alarmMuted=true;
+    }
     static void prepareFrame(ADCSView& view, int frame) {
         if(frame==0) {
             view.m_showTrail=true;
@@ -56,6 +90,12 @@ struct ADCSViewChecks {
         return passed;
     }
     static bool run(ADCSView& view) {
+        const int expectedTriangles[]={21129,117120,93121,247547};
+        for(int i=0;i<4;++i) {
+            int count=0;
+            for(const auto& part:view.m_additionalModels[i].parts)count+=part.mesh.indexCount/3;
+            if(count!=expectedTriangles[i]){std::cerr<<"Incomplete spacecraft model "<<i<<"\n";return false;}
+        }
         if (view.m_landsatModel.parts.size() != 33) {
             std::cerr << "Landsat 8 model failed to load all material groups\n";
             return false;
