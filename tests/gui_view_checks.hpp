@@ -14,9 +14,37 @@ struct ADCSViewChecks {
         bool okay=view.m_researchCatalog.satellites.size()==count&&view.m_dataStatus.find("using saved prediction")!=std::string::npos;
         const bool shown=view.m_showTrail,replay=view.m_replayActive;
         view.m_showTrail=true;view.m_replayActive=false;
-        okay &= view.hasActivePathRecording()==(view.m_trail.size()>1);
+        okay &= !view.hasActivePathRecording();
         view.m_replayActive=true;okay &= !view.hasActivePathRecording();
         view.m_showTrail=shown;view.m_replayActive=replay;
+        ADCSView recording;
+        recording.advancePhysics(.01);recording.startPathRecording();
+        okay &= recording.hasActivePathRecording();
+        recording.update(1.2f);recording.m_recording.stop();
+        OrbitReplay saved;std::string error;
+        okay &= !recording.hasActivePathRecording()&&saved.load(recording.m_recording.path(),error)&&saved.samples.size()>=2;
+        recording.m_mass=100;recording.m_inertiaValues[0]=10;recording.m_wheelTorque=20;recording.m_wheelMomentum=30;
+        recording.m_physicsStep=.05f;recording.m_physicsAccumulator=.04;
+        recording.m_gyroNoise=.01f;recording.m_biasDrift=.001f;recording.m_vectorNoise=.1f;
+        recording.m_biasValues[0]=.1f;recording.m_biasWalk={1,2,3};recording.m_satState.hWheel={1,2,3};
+        recording.m_gravityGradient=recording.m_sensorNoise=recording.m_customSlew=recording.m_numericalOrbit=true;
+        recording.m_maxSlew=5;recording.m_slewAcceleration=1;recording.m_elevationMask=30;
+        recording.m_orbitForces={true,true,100,100,5,50};
+        recording.resetExpertSettings();
+        okay &= recording.m_mass==6&&recording.m_inertiaValues[0]==.04f&&recording.m_wheelTorque==.005f&&recording.m_wheelMomentum==.05f;
+        okay &= recording.m_physicsStep==.01f&&recording.m_physicsAccumulator==0&&recording.m_gyroNoise==.0005f&&recording.m_biasDrift==.00005f&&recording.m_vectorNoise==.001f;
+        okay &= recording.m_biasValues[0]==.012f&&recording.m_biasWalk.norm()==0&&recording.m_satState.hWheel.norm()==0;
+        okay &= !recording.m_gravityGradient&&!recording.m_sensorNoise&&!recording.m_customSlew&&!recording.m_numericalOrbit;
+        okay &= recording.m_maxSlew==.25f&&recording.m_slewAcceleration==.02f&&recording.m_elevationMask==0;
+        okay &= !recording.m_orbitForces.j2&&!recording.m_orbitForces.drag&&recording.m_orbitForces.mass==6&&recording.m_orbitForces.area==1&&recording.m_orbitForces.cd==2.2&&recording.m_orbitForces.densityScale==1;
+        okay &= std::abs(recording.m_dynamics.computeAngularAcceleration({},{},{},{.005,0,0}).x-.125)<1e-10;
+        recording.m_camPreset=CameraPreset::FreeFlycam;recording.m_flyForward={0,0,-1};recording.m_flyUp={0,1,0};
+        recording.lookWithArrows(1,0,.1);okay &= recording.m_flyForward.x>0;
+        recording.m_flyForward={0,0,-1};recording.m_flyUp={0,1,0};recording.lookWithArrows(0,1,.1);okay &= recording.m_flyForward.y>0;
+        recording.m_flyForward={0,0,-1};recording.m_flyUp={0,1,0};recording.lookWithArrows(1,0,1);auto once=recording.m_flyForward;
+        recording.m_flyForward={0,0,-1};recording.m_flyUp={0,1,0};for(int i=0;i<60;++i)recording.lookWithArrows(1,0,1.0/60);
+        okay &= (recording.m_flyForward-once).norm()<1e-10;
+        if(!okay)std::cerr<<"Recording/fallback integration check failed: "<<error<<'\n';
         return okay;
     }
     static void prepareOrbitFrame(ADCSView& view,int frame) {
@@ -34,7 +62,7 @@ struct ADCSViewChecks {
         view.selectModel(2+std::min(frame/4,3));
         view.setRealScale(frame>=16);
         view.m_camPreset=CameraPreset::SatelliteOrbit;
-        view.m_satOrbitDistance=frame>=16?119.0f:8*view.modelFramingScale();
+        view.m_satOrbitDistance=frame>=16?175.0f:8*view.modelFramingScale();
         view.m_satOrbitYaw=0.7f;
         view.m_satOrbitPitch=0.35f;
         view.m_showResearch=false;view.m_showTrail=false;view.m_discoveryUntil=0;
@@ -112,20 +140,6 @@ struct ADCSViewChecks {
         view.m_orbitAltitudeKm=100; view.updateReentry();
         if(view.m_heatFlux>=hot) return false;
         view.m_orbitAltitudeKm=650; view.updateReentry();
-        {
-            ADCSView lod;
-            lod.m_earthLod=0;
-            lod.updateEarthLod(12.0);
-            if(lod.m_earthLod!=1) {std::cerr<<"High Earth LOD was not selected\n";return false;}
-            lod.updateEarthLod(24.5);
-            if(lod.m_earthLod!=1) {std::cerr<<"Earth LOD hysteresis failed at near boundary\n";return false;}
-            lod.updateEarthLod(26.0);
-            if(lod.m_earthLod!=0) {std::cerr<<"Distant Earth LOD was not selected\n";return false;}
-            lod.updateEarthLod(24.5);
-            if(lod.m_earthLod!=0) {std::cerr<<"Earth LOD hysteresis failed at far boundary\n";return false;}
-            lod.updateEarthLod(22.0);
-            if(lod.m_earthLod!=1) {std::cerr<<"Earth LOD did not return to high\n";return false;}
-        }
         {
             if(view.m_researchCatalog.satellites.size()<200) {
                 std::cerr<<view.m_researchCatalog.status<<"\n";return false;

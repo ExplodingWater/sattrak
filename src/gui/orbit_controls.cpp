@@ -41,6 +41,7 @@ bool ADCSView::loadReplay(const std::filesystem::path& path,bool reference) {
         for(size_t i=0;i<m_reference.samples.size();i+=stride){auto p=orbitToScene(m_reference.inertial(m_reference.samples[i]).position);m_comparisonLine.insert(m_comparisonLine.end(),{float(p.x),float(p.y),float(p.z)});}
         m_replayMessage="Comparison loaded; separation is evaluated at matching UTC times.";
     } else {
+        m_recording.stop();m_passes.clear();m_passMessage.clear();
         if(!m_replayActive){m_replaySavedAltitude=m_orbitAltitudeKm;m_replaySavedSpin=m_earthSpinAngleRad;}
         m_replay=std::move(loaded);m_replayActive=true;m_entryPreview=false;m_isPaused=true;
         m_showTrail=true;m_physicsAccumulator=0;seekReplay(0);
@@ -95,6 +96,7 @@ void ADCSView::drawOrbitReplay() {
     ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(),ImGuiCond_Appearing,ImVec2(.5f,.5f));
     ImGui::SetNextWindowBgAlpha(.98f);
     if(ImGui::Begin("Recorded orbit replay",&m_replayWindow)) {
+        drawRecordingControls();
         ImGui::TextWrapped("Import timestamped position and velocity in kilometers and km/s. CSV and single-segment CCSDS OEM (KVN) are supported.");
         ImGui::InputText("Primary file",m_replayPath,sizeof(m_replayPath));
         if(ImGui::Button("Browse primary"))browse(m_replayPath,sizeof(m_replayPath));ImGui::SameLine();
@@ -121,6 +123,24 @@ void ADCSView::drawOrbitReplay() {
             ImGui::TextDisabled("Green: replay history | Gold: comparison orbit");
             ImGui::InputText("Report path",m_reportPath,sizeof(m_reportPath));
             if(ImGui::Button("Export station report (CSV)"))exportReplayReport(utf8path(m_reportPath));
+            ImGui::SeparatorText("Ground-station passes");
+            if(m_passLat!=m_targetLatDeg||m_passLon!=m_targetLonDeg||m_passMask!=m_elevationMask){m_passes.clear();m_passMessage="Station or elevation mask changed. Calculate passes again.";}
+            if(ImGui::Button("Calculate passes in this file")){
+                m_passLat=m_targetLatDeg;m_passLon=m_targetLonDeg;m_passMask=m_elevationMask;
+                try{m_passes=findStationPasses(m_replay,m_passLat,m_passLon,m_passMask);m_passMessage=std::to_string(m_passes.size())+" passes above "+std::to_string(int(m_passMask))+" deg. Click a row to replay.";}
+                catch(const std::exception& e){m_passMessage=e.what();}
+            }
+            ImGui::TextWrapped("%s",m_passMessage.c_str());
+            ImGui::TextWrapped("Geometric, spherical-Earth visibility. Search uses 10-second brackets; very brief grazing passes can be missed. * marks a pass cut off by file coverage.");
+            if(ImGui::BeginTable("passes",4,ImGuiTableFlags_Borders|ImGuiTableFlags_RowBg|ImGuiTableFlags_ScrollY,ImVec2(0,160))){
+                ImGui::TableSetupColumn("Start UTC");ImGui::TableSetupColumn("End UTC");ImGui::TableSetupColumn("Duration");ImGui::TableSetupColumn("Max elevation");ImGui::TableHeadersRow();
+                for(size_t i=0;i<m_passes.size();++i){const auto& pass=m_passes[i];ImGui::PushID(int(i));ImGui::TableNextRow();ImGui::TableNextColumn();
+                    auto label=formatOrbitUtc(pass.start).substr(0,19)+(pass.clippedStart?"*":"");
+                    if(ImGui::Selectable(label.c_str(),false,ImGuiSelectableFlags_SpanAllColumns)){seekReplay(pass.start-m_replay.samples.front().utc);m_isPaused=false;}
+                    ImGui::TableNextColumn();ImGui::Text("%s%s",formatOrbitUtc(pass.end).substr(0,19).c_str(),pass.clippedEnd?"*":"");
+                    ImGui::TableNextColumn();ImGui::Text("%.0f s",pass.end-pass.start);ImGui::TableNextColumn();ImGui::Text("%.2f deg",pass.maxElevation);ImGui::PopID();
+                }ImGui::EndTable();
+            }
         }
         ImGui::Separator();ImGui::TextWrapped("%s",m_replayMessage.c_str());
         ImGui::TextWrapped("CSV requires # frame=EME2000 or # frame=ECEF, followed by: utc,x_km,y_km,z_km,vx_km_s,vy_km_s,vz_km_s");
@@ -134,8 +154,27 @@ void ADCSView::initializeNumericalOrbit() {
         Vec3(-std::sin(a),-std::cos(a)*std::cos(inc),std::cos(a)*std::sin(inc))*std::sqrt(398600.4418/r)};
     m_numericalReady=true;
 }
+void ADCSView::resetExpertSettings() {
+    aero::adcs::SpacecraftParameters properties;
+    m_mass=float(properties.mass);m_inertiaValues[0]=.04f;m_inertiaValues[1]=.04f;m_inertiaValues[2]=.02f;
+    m_wheelTorque=float(properties.maxWheelTorque);m_wheelMomentum=float(properties.maxWheelMomentum);
+    m_dynamics=aero::adcs::SatelliteDynamics(properties);m_satState.hWheel={};
+    aero::adcs::MEKFConfig noise;
+    m_gyroNoise=float(noise.sigmaGyroWhiteNoise);m_biasDrift=float(noise.sigmaGyroBiasDrift);m_vectorNoise=.001f;
+    m_biasValues[0]=.012f;m_biasValues[1]=-.015f;m_biasValues[2]=.010f;m_trueGyroBias={.012,-.015,.010};
+    m_mekf=aero::adcs::MEKF(noise);m_biasWalk={};m_sensorRandom.seed(42);
+    m_physicsStep=.01f;m_physicsAccumulator=0;m_gravityGradient=false;m_sensorNoise=false;
+    m_customSlew=false;m_maxSlew=.25f;m_slewAcceleration=.02f;m_elevationMask=0;
+    if(m_numericalOrbit&&m_recording.active()){m_recording.stop();m_recording.status="Recording stopped because expert reset changed orbit propagation. Save this segment before recording again.";}
+    m_numericalOrbit=false;m_numericalReady=false;m_orbitForces=OrbitForces{};
+    m_passes.clear();m_passMessage="Expert settings reset. Recalculate passes using the default elevation mask.";
+    computeLineOfSight();
+    m_expertMessage="Default values applied.";
+}
 void ADCSView::drawExpertSettings() {
     if(!ImGui::CollapsingHeader("Expert physics & sensors"))return;
+    if(ImGui::Button("Reset all expert settings to defaults"))resetExpertSettings();
+    hint("Immediately restores every expert control and applies the default spacecraft and estimator settings. Numerical orbit propagation is disabled; an active numerical-orbit recording is stopped.");
     ImGui::TextWrapped("Illustrative engineering controls. Mesh selection does not supply real spacecraft mass or inertia.");
     sliderFloatExact("Mass (kg)",&m_mass,.01f,1e6f,"%.3f","%.3f",ImGuiSliderFlags_Logarithmic);
     for(int i=0;i<3;++i){const char* names[]={"Inertia X (kg m2)","Inertia Y (kg m2)","Inertia Z (kg m2)"};sliderFloatExact(names[i],&m_inertiaValues[i],.0001f,1e8f,"%.4f","%.4f",ImGuiSliderFlags_Logarithmic);}

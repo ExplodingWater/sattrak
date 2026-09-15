@@ -20,6 +20,7 @@
 #include "gui/adcs_view.hpp"
 #include "gui/cfd_view.hpp"
 #include "gui/music_player.hpp"
+#include "gui/developer_console.hpp"
 #include "gui/music_icons.hpp"
 #include "../../tests/gui_view_checks.hpp"
 
@@ -83,7 +84,8 @@ int main(int argc, char** argv) {
     const bool modelSmoke = argc > 1 && std::strcmp(argv[1], "--models-smoke-test") == 0;
     const bool orbitSmoke = argc > 1 && std::strcmp(argv[1], "--orbit-smoke-test") == 0;
     const bool startupSmoke = argc > 1 && std::strcmp(argv[1], "--startup-smoke-test") == 0;
-    const bool smokeTest = startupSmoke || orbitSmoke || multiSmoke || modelSmoke || (argc > 1 && std::strcmp(argv[1], "--smoke-test") == 0);
+    const bool consoleSmoke = argc > 1 && std::strcmp(argv[1], "--console-smoke-test") == 0;
+    const bool smokeTest = consoleSmoke || startupSmoke || orbitSmoke || multiSmoke || modelSmoke || (argc > 1 && std::strcmp(argv[1], "--smoke-test") == 0);
     if (!std::filesystem::exists("earth_texture.jpg")) {
         auto executableDir = std::filesystem::absolute(argv[0]).parent_path();
         if (std::filesystem::exists(executableDir / "earth_texture.jpg"))
@@ -103,6 +105,7 @@ int main(int argc, char** argv) {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_DEPTH_BITS, 24);
 #ifdef __APPLE__
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
 #endif
@@ -157,13 +160,14 @@ int main(int argc, char** argv) {
     glfwSetWindowUserPointer(window,&adcsView);
     if(!smokeTest){
         adcsView.initInternetChoice();
+        adcsView.findRecoveryRecordings();
         glfwSetWindowCloseCallback(window,[](GLFWwindow* w){
 #ifdef _WIN32
             auto* view=static_cast<gui::ADCSView*>(glfwGetWindowUserPointer(w));
             if(view)view->suspendAudio();
-            const wchar_t* message=view&&view->hasActivePathRecording()
-                ? L"You're currently recording your satellite path. Closing sattrak will discard this session's unsaved path. Confirm exit?"
-                : L"Are you sure you want to close?";
+            const wchar_t* message=view&&(view->hasActivePathRecording()||view->hasUnsavedPathRecording())
+                ? L"Your satellite path has not been saved. Exiting sattrak will discard it. Choose No to return and use Save or Save As. Confirm exit?"
+                : L"Are you sure you want to exit?";
             glfwSetWindowShouldClose(w,MessageBoxW(glfwGetWin32Window(w),message,L"sattrak",MB_YESNO|MB_ICONWARNING|MB_DEFBUTTON2)==IDYES);
             exitDialogClosed=true;
 #endif
@@ -185,8 +189,10 @@ int main(int argc, char** argv) {
     }
 
     gui::MusicPlayer musicPlayer;
+    gui::DeveloperConsole console;
     musicPlayer.init("assets/music");
     musicPlayer.initRadio("assets/radio");
+    adcsView.attachAudio(musicPlayer);
     if (smokeTest) {
         musicPlayer.setVolumePercent(250);
         smokeFailed |= musicPlayer.volumePercent() != 200;
@@ -225,9 +231,17 @@ int main(int argc, char** argv) {
             io.AddMousePosEvent(smokeFrame < 3 ? io.DisplaySize.x-100 : io.DisplaySize.x/2, 100);
         }
         ImGui::NewFrame();
+        if(consoleSmoke){
+            if(smokeFrame==0)io.AddKeyEvent(ImGuiKey_F1,true);
+            if(smokeFrame==1)io.AddKeyEvent(ImGuiKey_F1,false);
+            if(smokeFrame==2)io.AddInputCharactersUTF8("help");
+            if(smokeFrame==3)io.AddKeyEvent(ImGuiKey_Enter,true);
+            if(smokeFrame==4)io.AddKeyEvent(ImGuiKey_Enter,false);
+        }
         if(smokeTest&&smokeFrame==0)smokeFailed |= !gui::ADCSViewChecks::checkDataFallback(adcsView);
         if(startupSmoke&&smokeFrame==0)gui::ADCSViewChecks::showStartupChoice(adcsView);
         musicPlayer.update(currentTime);
+        console.draw(musicPlayer);
 
         // Top Command Bar (Tab Selector)
         ImGui::SetNextWindowPos(ImVec2(0, 0));
@@ -293,10 +307,12 @@ int main(int argc, char** argv) {
                 ImGui::SetTooltip("Exact music volume percentage. Enter any whole number from 0 to 200; values above 100 amplify and may clip.");
 
             if(ImGui::BeginMenu("Radio")) {
+                bool muted=musicPlayer.radioMuted();
+                if(ImGui::MenuItem("Mute radio communications",nullptr,&muted))musicPlayer.setRadioMuted(muted);
                 bool enabled=musicPlayer.radioEnabled();
                 if(ImGui::MenuItem("Occasional radio",nullptr,&enabled))musicPlayer.setRadioEnabled(enabled);
-                ImGui::TextDisabled("Fixed volume: 10%% | fade-in: 5 seconds");
-                ImGui::TextDisabled("45-120 minutes between recordings");
+                ImGui::TextDisabled("Radio volume: %d%% | fade-in: 5 seconds",musicPlayer.radioVolumePercent());
+                ImGui::TextDisabled("15-30 minutes between recordings");
                 if(enabled&&!musicPlayer.radioPlaying())ImGui::Text("Next in %.0f min",musicPlayer.secondsUntilRadio()/60);
                 ImGui::TextWrapped("%s",musicPlayer.radioStatus().c_str());
                 ImGui::BeginDisabled(!enabled);
@@ -325,13 +341,13 @@ int main(int argc, char** argv) {
             if(orbitSmoke)gui::ADCSViewChecks::prepareOrbitFrame(adcsView,smokeFrame);
             else if(multiSmoke)gui::ADCSViewChecks::prepareMultiFrame(adcsView,smokeFrame);
             else if(modelSmoke)gui::ADCSViewChecks::prepareModelFrame(adcsView,smokeFrame);
-            else if (smokeTest && !startupSmoke) gui::ADCSViewChecks::prepareFrame(adcsView, smokeFrame);
+            else if (smokeTest && !startupSmoke && !consoleSmoke) gui::ADCSViewChecks::prepareFrame(adcsView, smokeFrame);
             adcsView.update(dt);
             if (smokeTest && smokeFrame >= 8) {
                 ImGui::SetScrollY(ImGui::FindWindowByName("Flight Director & Camera"), 650);
             }
             adcsView.drawUI();
-            if (smokeTest && !startupSmoke && !orbitSmoke && !modelSmoke && !multiSmoke) smokeFailed |= !gui::ADCSViewChecks::checkRouting(adcsView, smokeFrame);
+            if (smokeTest && !consoleSmoke && !startupSmoke && !orbitSmoke && !modelSmoke && !multiSmoke) smokeFailed |= !gui::ADCSViewChecks::checkRouting(adcsView, smokeFrame);
             adcsView.renderViews(window,dt);
         } else {
             adcsView.closeDesktopViews();

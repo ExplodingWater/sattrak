@@ -13,6 +13,9 @@
 #include "gui/satellite_model.hpp"
 #include "gui/research_catalog.hpp"
 #include "gui/orbit_replay.hpp"
+#include "gui/orbit_recording.hpp"
+#include "gui/alarm_audio.hpp"
+#include "gui/music_player.hpp"
 #include <random>
 #include <future>
 
@@ -73,7 +76,10 @@ public:
     void drawInternetChoice();
     void drawInternetSettings();
     void startCatalogRefresh();
-    bool hasActivePathRecording() const { return m_showTrail && !m_replayActive && m_trail.size()>1; }
+    void startPathRecording();
+    void findRecoveryRecordings();
+    bool hasActivePathRecording() const { return m_recording.active(); }
+    bool hasUnsavedPathRecording() const { return m_recording.unsaved(); }
     void handleInput(GLFWwindow* window, float dt);
     void update(float dt);
     void secretKey(int key, int action, bool typing);
@@ -83,6 +89,7 @@ public:
     void renderViews(GLFWwindow* mainWindow,float dt);
     void closeDesktopViews();
     void drawUI();
+    void attachAudio(MusicPlayer& player) { m_audio=&player; m_alarmAudio.setGain(player.masterVolumePercent()/100.0f); }
     void drawFlightOverlay();
     void setCameraPreset(CameraPreset preset) { m_camPreset = preset; }
     void cleanup();
@@ -92,6 +99,20 @@ public:
     void onScroll(double yoffset);
 
 private:
+    MusicPlayer* m_audio=nullptr;
+    OrbitRecording m_recording;
+    double m_recordStartUtc=0,m_recordStartSim=0,m_recordNext=0;
+    OrbitSample m_lastRecorded;
+    char m_recordSavePath[1024]="recorded-orbit.csv";
+    std::vector<std::filesystem::path> m_recoveryFiles;
+    std::vector<StationPass> m_passes;
+    std::string m_passMessage;
+    double m_passLat=0,m_passLon=0,m_passMask=0;
+    void drawRecordingControls();
+    void resetExpertSettings();
+    void lookWithArrows(double horizontal,double vertical,double dt);
+    void captureOrbitSample();
+    OrbitSample currentRecordingSample() const;
     int m_internetChoice=-1;
     bool m_askInternet=false;
     std::future<std::string> m_catalogDownload;
@@ -153,7 +174,6 @@ private:
     aero::math::Vec3 m_biasWalk;
     void drawResearchAndTrail(const Mat4& viewProj, int width, int height, bool closePass=false);
     void recordTrail();
-    void updateEarthLod(double centerDistance);
     ResearchCatalog m_researchCatalog;
     bool m_researchUnlocked=false, m_showResearch=false, m_showTrail=false;
     unsigned m_secretProgress=0;
@@ -170,6 +190,7 @@ private:
     void drawReentry(const Mat4& viewProj, const Mat4& satModel, int height);
     void updateAlarm(bool active);
     bool m_entryPreview=false, m_alarmMuted=false, m_alarmPlaying=false;
+    AlarmAudio m_alarmAudio;
     float m_descentKmS=0.25f;
     double m_heatFlux=0, m_dynamicPressure=0, m_projectedArea=0, m_airSpeed=0;
     aero::math::Vec3 m_airDirection{1,0,0};
@@ -205,10 +226,7 @@ private:
     aero::math::Vec3 m_flyForward{0, 0, -1};
     aero::math::Vec3 m_flyUp{0, 1, 0};
     void enterFlycam();
-    // Two complete sphere meshes. The active one is selected from camera-to-center
-    // distance with hysteresis so crossing a boundary does not cause visible chatter.
-    Mesh m_earthMeshes[2]; // 0: existing mesh (low), 1: four-times-denser mesh (high)
-    int m_earthLod = 0;
+    Mesh m_earthMesh; // Highest-detail sphere at every camera distance.
     Mesh m_busMesh;
     Mesh m_solarPanelMesh;
     Mesh m_lensMesh;
