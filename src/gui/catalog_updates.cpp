@@ -91,10 +91,17 @@ void ADCSView::drawInternetChoice() {
     }
 }
 void ADCSView::drawInternetSettings() {
+    ImGui::SeparatorText("Satellite orbit data");
     bool online=m_internetChoice==1;
     ImGui::BeginDisabled(m_catalogDownload.valid());
-    if(ImGui::Checkbox("Internet satellite updates",&online)){m_internetChoice=online?1:0;saveChoice(m_internetChoice);if(online)startCatalogRefresh();else m_dataStatus="Offline prediction from saved elements";}
-    ImGui::EndDisabled();ImGui::TextWrapped("%s",m_dataStatus.c_str());
+    if(ImGui::Checkbox("Allow internet access to fetch satellite orbit data",&online)){m_internetChoice=online?1:0;saveChoice(m_internetChoice);if(online)startCatalogRefresh();else m_dataStatus="Offline prediction from saved elements";}
+    ImGui::BeginDisabled(!online);
+    if(ImGui::Button("Check for updated satellite data"))startCatalogRefresh();
+    ImGui::EndDisabled();
+    ImGui::EndDisabled();
+    ImGui::Text("%zu satellites in the loaded catalog",m_researchCatalog.satellites.size());
+    ImGui::TextWrapped("%s",m_dataStatus.c_str());
+    ImGui::TextWrapped("Permission is remembered. Checks are limited to once per two hours; offline or failed requests use saved orbital data.");
     ImGui::TextWrapped("Catalog updates use CelesTrak TLE data for supported five-digit NORAD IDs. Movement is predicted, not live telemetry.");
     ImGui::Separator();
 }
