@@ -93,6 +93,8 @@ void ADCSView::moveViewCamera(MultiView& v,double dx,double dy,bool right,double
     if(keyboard) {
         auto key=[&](int code){return glfwGetKey(window,code)==GLFW_PRESS?1.0:0.0;};
         const double f=key(GLFW_KEY_W)-key(GLFW_KEY_S),r=key(GLFW_KEY_D)-key(GLFW_KEY_A),u=key(GLFW_KEY_E)-key(GLFW_KEY_Q);
+        if(!ImGui::GetIO().WantTextInput&&!ImGui::IsAnyItemActive()&&!ImGui::IsPopupOpen(nullptr,ImGuiPopupFlags_AnyPopupId|ImGuiPopupFlags_AnyPopupLevel))
+            lookWithArrows(key(GLFW_KEY_RIGHT)-key(GLFW_KEY_LEFT),key(GLFW_KEY_UP)-key(GLFW_KEY_DOWN),dt);
         if(f||r||u)moveFlycam(f,r,u,key(GLFW_KEY_LEFT_SHIFT)!=0,dt);
     }
     v.camera=captureCamera();
