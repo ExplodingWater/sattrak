@@ -275,5 +275,3 @@ The Radio menu provides occasional recorded amateur contacts and Morse reception
 Multi View beside Camera Perspectives provides 1–8 independent numbered cameras, either bordered tiles or separate desktop windows. Turn it off to return to View 1. More views increase GPU load. Satellite Orbit can approach 0.25 meters from the spacecraft center in physical scale; entering model geometry is possible.
 
 Physical-scale targeting uses a conservative acceleration-limited attitude slew (0.25 degrees/s; Hubble 0.1 degrees/s), with a yellow estimated countdown on the selected station. Settings offers a quick-reposition override. These are illustrative controller limits, not validated spacecraft parameters; the ETA is for pointing, not the next unobstructed ground pass. Existing angular momentum can take time to settle.
-
-Natural track endings now have randomized 90–180 second silence before the next song fades in. Play or Next skips the silence; Previous restarts the finished song.
