@@ -11,11 +11,6 @@
 #include <fstream>
 #include <random>
 #include <algorithm>
-#ifdef _WIN32
-#define NOMINMAX
-#include <windows.h>
-#include <mmsystem.h>
-#endif
 #include <cstdint>
 #include <cstring>
 
@@ -23,8 +18,6 @@ namespace gui {
 
 const float EARTH_RADIUS_3D = 12.0f; // Scaled 3D Earth radius
 const double KM_TO_3D = EARTH_RADIUS_3D / 6378.137;
-const double EARTH_HIGH_LOD_DISTANCE = 2.0 * EARTH_RADIUS_3D;
-const double EARTH_LOD_HYSTERESIS = 0.05;
 
 
 // Each panel follows its edge until its title bar is dragged. ImGui retains
@@ -90,6 +83,11 @@ void ADCSView::enterFlycam() {
     m_flyForward = m_cameraForward;
     m_flyUp = m_cameraUp;
     m_camPreset = CameraPreset::FreeFlycam;
+}
+void ADCSView::lookWithArrows(double horizontal,double vertical,double dt) {
+    if((horizontal==0&&vertical==0)||dt<=0)return;
+    const double magnitude=std::max(1.0,std::hypot(horizontal,vertical));
+    enterFlycam();rotateFlycam(horizontal/magnitude*300*dt,-vertical/magnitude*300*dt);
 }
 
 // GLSL Shaders
@@ -274,8 +272,7 @@ bool ADCSView::init() {
     glEnableVertexAttribArray(0);
     glBindVertexArray(0);
 
-    m_earthMeshes[0] = createSphereMesh(EARTH_RADIUS_3D, 128, 192);
-    m_earthMeshes[1] = createSphereMesh(EARTH_RADIUS_3D, 256, 384);
+    m_earthMesh = createSphereMesh(EARTH_RADIUS_3D, 256, 384);
     m_busMesh = createBoxMesh(0.7f, 0.7f, 1.2f);
     m_solarPanelMesh = createBoxMesh(1.4f, 0.04f, 0.8f);
     m_lensMesh = createCylinderMesh(0.24f, 0.28f, 0.55f, 32);
@@ -359,6 +356,7 @@ void ADCSView::handleInput(GLFWwindow* window, float dt) {
     if ((sceneInput || m_isRightClickDragging) && !io.WantTextInput && !ImGui::IsAnyItemActive()
         && !ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel)) {
         auto key = [&](int k) { return glfwGetKey(window, k) == GLFW_PRESS ? 1.0 : 0.0; };
+        lookWithArrows(key(GLFW_KEY_RIGHT)-key(GLFW_KEY_LEFT),key(GLFW_KEY_UP)-key(GLFW_KEY_DOWN),dt);
         moveFlycam(key(GLFW_KEY_W)-key(GLFW_KEY_S), key(GLFW_KEY_D)-key(GLFW_KEY_A),
             std::max(key(GLFW_KEY_E), key(GLFW_KEY_SPACE))-std::max(key(GLFW_KEY_Q), key(GLFW_KEY_C)),
             key(GLFW_KEY_LEFT_SHIFT) || key(GLFW_KEY_RIGHT_SHIFT), dt);
@@ -522,6 +520,7 @@ void ADCSView::advancePhysics(double dt) {
     }
     }
 
+    captureOrbitSample();
     computeLineOfSight();
 
     // 3. Closed-loop Pointing to Ground Target
@@ -618,15 +617,6 @@ void ADCSView::rotateSatelliteOrbit(float dx, float dy) {
     m_satOrbitYaw = std::remainder(m_satOrbitYaw + dx*m_sensitivity, 6.283185307f);
     m_satOrbitPitch = std::remainder(m_satOrbitPitch + dy*m_sensitivity, 6.283185307f);
 }
-void ADCSView::updateEarthLod(double centerDistance) {
-    // High: within 2 Earth radii. Low: beyond 2 Earth radii. Five percent
-    // overlap keeps the selected mesh stable near the boundary.
-    if (m_earthLod == 1) {
-        if (centerDistance > EARTH_HIGH_LOD_DISTANCE * (1.0 + EARTH_LOD_HYSTERESIS)) m_earthLod = 0;
-    } else if (centerDistance < EARTH_HIGH_LOD_DISTANCE * (1.0 - EARTH_LOD_HYSTERESIS)) {
-        m_earthLod = 1;
-    }
-}
 void ADCSView::render3D(int width, int height) {
     glViewport(0, 0, width, height);
     glEnable(GL_DEPTH_TEST);
@@ -693,7 +683,6 @@ void ADCSView::render3D(int width, int height) {
     }
 
     m_cameraEye = camEye;
-    updateEarthLod(camEye.norm());
     m_cameraForward = (camTarget - camEye).normalized();
     if (std::abs(m_cameraForward.dot(camUp.normalized())) > 0.999)
         camUp = std::abs(m_cameraForward[1]) < 0.9 ? aero::math::Vec3(0,1,0) : aero::math::Vec3(1,0,0);
@@ -733,7 +722,7 @@ void ADCSView::render3D(int width, int height) {
     m_shader3D.setInt("uTexture", 0);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, m_earthTexId);
-    m_earthMeshes[m_earthLod].draw();
+    m_earthMesh.draw();
 
     // Integrate atmospheric density along the view and sunlight rays.
     glEnable(GL_BLEND);
@@ -748,7 +737,7 @@ void ADCSView::render3D(int width, int height) {
     Mat4 shell = Mat4::scale(1.02f, 1.02f, 1.02f);
     m_atmosphereShader.setMat4("uModel", shell);
     m_atmosphereShader.setMat4("uMVP", Mat4::multiply(viewProj, shell));
-    m_earthMeshes[m_earthLod].draw();
+    m_earthMesh.draw();
     glDisable(GL_CULL_FACE);
     glCullFace(GL_BACK);
     glEnable(GL_DEPTH_TEST);
@@ -777,7 +766,10 @@ void ADCSView::render3D(int width, int height) {
         const auto localEye = (camEye - m_satPosECI) / spacecraftScale();
         const Mat4 localView = Mat4::lookAt(localEye, localEye + m_cameraForward, m_cameraUp);
         const double radius=selectedDetailedModel()?selectedDetailedModel()->radius:2.1;
-        const float nearSatellite=float(std::clamp((localEye.norm()-radius)*.05,.001,10000.0));
+        // Use camera-space distance to the bounding sphere; keep its nearest surface
+        // beyond the near plane while giving close, layered geometry more depth precision.
+        const double nearest=-localEye.dot(m_cameraForward)-radius;
+        const float nearSatellite=float(std::clamp(nearest*.8,.001,1.0e8));
         viewProj = Mat4::multiply(Mat4::perspective(45.0f * 3.14159265f / 180.0f, aspect, nearSatellite, 1.0e10f), localView);
         glClear(GL_DEPTH_BUFFER_BIT);
         m_shader3D.setVec3("uViewPos", float(localEye[0]), float(localEye[1]), float(localEye[2]));
@@ -944,25 +936,7 @@ void ADCSView::updateReentry() {
 }
 void ADCSView::updateAlarm(bool active) {
     if(active==m_alarmPlaying) return;
-#ifdef _WIN32
-    // Persistent in-memory PCM: two alternating warning tones, then a quiet gap.
-    static const std::vector<char> wave=[] {
-        constexpr int rate=22050, samples=rate;
-        std::vector<char> w(44+samples*2,0);
-        auto put=[&](int offset,uint32_t value,int bytes){for(int i=0;i<bytes;++i)w[offset+i]=char(value>>(8*i));};
-        std::memcpy(w.data(),"RIFF",4);put(4,uint32_t(w.size()-8),4);std::memcpy(w.data()+8,"WAVEfmt ",8);
-        put(16,16,4);put(20,1,2);put(22,1,2);put(24,rate,4);put(28,rate*2,4);put(32,2,2);put(34,16,2);
-        std::memcpy(w.data()+36,"data",4);put(40,samples*2,4);
-        for(int i=0;i<samples;++i){double t=double(i)/rate, phase=std::fmod(t,.25);
-            double env=t<.5?std::min({1.0,phase/.01,(.25-phase)/.02}):0;
-            int16_t sample=int16_t(4500*env*std::sin(6.283185307*t*(t<.25?880:1175)));
-            put(44+i*2,uint16_t(sample),2);
-        } return w;
-    }();
-    if(active) PlaySoundA(wave.data(),nullptr,SND_MEMORY|SND_ASYNC|SND_LOOP|SND_NODEFAULT);
-    else PlaySoundA(nullptr,nullptr,0);
-#endif
-    m_alarmPlaying=active;
+    m_alarmPlaying=m_alarmAudio.setActive(active)&&active;
 }
 void ADCSView::drawReentry(const Mat4& viewProj,const Mat4& satModel,int height) {
     if(m_heatFlux<=100000) return;
@@ -1128,15 +1102,39 @@ void ADCSView::drawSettings() {
     bool open = true;
     if (ImGui::BeginPopupModal("Camera & simulation settings", &open)) {
         ImGui::PushItemWidth(220);
+        if(ImGui::Button("About",ImVec2(-1,28)))ImGui::OpenPopup("About sattrak");
+        if(ImGui::BeginPopupModal("About sattrak",nullptr,ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("sattrak");
+            ImGui::Separator();
+            ImGui::Text("Martin Hafizi | ExplodingWater");
+            ImGui::TextLinkOpenURL("github.com/ExplodingWater","https://github.com/ExplodingWater");
+            ImGui::Text("Made with love.");
+            ImGui::Text("Satellite tracking, orbital dynamics and aerospace simulation.");
+            if(ImGui::Button("Back to Settings",ImVec2(-1,28)))ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+        }
+        if(m_audio) {
+            ImGui::SeparatorText("Audio");
+            float master=float(m_audio->masterVolumePercent()),radio=float(m_audio->radioVolumePercent());
+            if(sliderFloatExact("Master volume",&master,0,200,"%.0f%%","%.0f")) {
+                m_audio->setMasterVolumePercent(int(std::round(master)));
+                m_alarmAudio.setGain(m_audio->masterVolumePercent()/100.0f);
+            }
+            explain("Controls all audio, including music, radio communications and the reentry alarm.");
+            if(sliderFloatExact("Radio volume",&radio,0,200,"%.0f%%","%.0f"))m_audio->setRadioVolumePercent(int(std::round(radio)));
+            explain("Radio level before master volume. Defaults to 10%. Applies now and to future automatic clips; radio.play --volume overrides it for that clip.");
+            bool muted=m_audio->radioMuted();
+            if(ImGui::Checkbox("Mute radio communications",&muted))m_audio->setRadioMuted(muted);
+            ImGui::BeginDisabled(!m_audio->radioPlaying());
+            if(ImGui::Button("Stop radio communications"))m_audio->stopRadio();
+            ImGui::EndDisabled();
+        }
         drawInternetSettings();
         ImGui::Checkbox("Satellite trail since t=0", &m_showTrail);
         explain("Light-green flight history recorded from simulation start, even while hidden. Older samples are progressively simplified. It gets visually thinner nearby. Position jumps start a new segment.");
         if(m_researchUnlocked) {
             ImGui::BeginDisabled(m_researchCatalog.satellites.empty());
-            if(ImGui::Checkbox("Research satellites", &m_showResearch) && m_showResearch) {
-                m_camPreset=CameraPreset::FreeOrbitArcball;
-                m_arcballCenter={0,0,0};m_arcballDist=42;
-            }
+            ImGui::Checkbox("Research satellites", &m_showResearch);
             ImGui::EndDisabled();
             ImGui::TextWrapped("%s",m_researchCatalog.status.c_str());
             ImGui::TextWrapped("CelesTrak: science, Earth resources and weather. Hover a dot for its name. Prediction starts at session UTC and advances with simulation time. Older elements are less reliable; not live tracking.");
@@ -1207,7 +1205,7 @@ void ADCSView::drawSettings() {
         }
         explain("Place the free camera 20 meters above the satellite. It continues moving at the selected speed; set satellite speed to zero to inspect it at rest.");
         ImGui::EndDisabled();
-        ImGui::TextWrapped("WASD: fly | E/Q: rise/descend | Shift: boost. Move the pointer onto the 3D scene to fly. Hold right mouse to look.");
+        ImGui::TextWrapped("WASD: fly | E/Q: rise/descend | Shift: boost. Move the pointer onto the 3D scene. Use arrow keys or hold right mouse to look.");
         drawExpertSettings();
         ImGui::PopItemWidth();
         if (ImGui::Button("Close", ImVec2(-1, 28))) ImGui::CloseCurrentPopup();
@@ -1304,6 +1302,7 @@ void ADCSView::drawTelemetryHUD() {
         }
     }
     if (m_entryPreview || m_heatFlux > 100000) {
+        if(m_alarmAudio.failed())ImGui::TextColored(ImVec4(1,.5f,.2f,1),"Reentry alarm: audio output unavailable");
         ImGui::Text("Heat estimate: %.0f kW/m2", m_heatFlux/1000);
         explain("Approximate Sutton-Graves stagnation heat flux; not a material failure prediction.");
         ImGui::Text("Air speed %.2f km/s | q %.0f Pa",m_airSpeed/1000,m_dynamicPressure);
@@ -1388,8 +1387,9 @@ void ADCSView::drawCharts() {
 void ADCSView::drawControlPanel() {
     beginEdgePanel("Flight Director & Camera", 2);
     ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.55f);
-    if (ImGui::Button("Settings / 1:1 mode", ImVec2(-1, 28))) m_openSettings = true;
+    if (ImGui::Button("Settings", ImVec2(-1, 28))) m_openSettings = true;
     if (ImGui::Button("Recorded orbit replay / import",ImVec2(-1,28)))m_replayWindow=true;
+    if(m_recording.active())ImGui::TextColored(ImVec4(1,.25f,.2f,1),"RECORDING PATH | %zu samples",m_recording.count());
 
     if (ImGui::Button(m_isPaused ? "Resume Sim" : "Pause Sim", ImVec2((ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f, 28))) {
         m_isPaused = !m_isPaused;
@@ -1439,8 +1439,8 @@ void ADCSView::drawControlPanel() {
     ImGui::TextColored(ImVec4(0.22f, 0.74f, 0.97f, 1.0f), "CAMERA PERSPECTIVES:");
     drawMultiViewControls();
     explain("Choose a viewpoint. Right-drag enters free flight from the current view without jumping to a new position.");
-    ImGui::TextDisabled("Controls: Hold Right-Click + WASD to fly");
-    explain("Hold right mouse to look in any direction. WASD moves, E/Space rises, Q/C descends, Shift accelerates, and Escape releases the pointer.");
+    ImGui::TextDisabled("Look: arrows / right mouse | Move: WASD");
+    explain("Arrow keys or right mouse look in any direction and enter free flight. WASD moves, E/Space rises, Q/C descends, Shift accelerates, and Escape releases the pointer. Keyboard look follows camera sensitivity and is disabled over editors and dialogs.");
 
     ImGui::BeginDisabled(m_multiView);
     if (ImGui::Selectable("  Free Flycam (WASD + Right-Click)", m_camPreset == CameraPreset::FreeFlycam)) {
@@ -1620,6 +1620,7 @@ void ADCSView::resetPointing() {
 }
 
 void ADCSView::cleanup() {
+    m_recording.discard();
     cleanupViews();
     for (auto& station : m_stations) {
         if (station.texture) glDeleteTextures(1, &station.texture);
@@ -1640,7 +1641,7 @@ void ADCSView::cleanup() {
     m_atmosphereShader.cleanup();
     m_landsatModel.cleanup();
     for(auto& model:m_additionalModels)model.cleanup();
-    for (auto& mesh : m_earthMeshes) mesh.cleanup();
+    m_earthMesh.cleanup();
     m_busMesh.cleanup();
     m_solarPanelMesh.cleanup();
     m_lensMesh.cleanup();
