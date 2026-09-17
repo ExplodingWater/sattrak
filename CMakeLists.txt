@@ -58,9 +58,14 @@ set(GUI_SOURCES
     src/gui/research_catalog.cpp
     src/gui/catalog_updates.cpp
     src/gui/music_player.cpp
+    src/gui/alarm_audio.cpp
+    src/gui/radio_commands.cpp
+    src/gui/developer_console.cpp
     src/gui/adcs_view.cpp
     src/gui/multi_view.cpp
     src/gui/orbit_replay.cpp
+    src/gui/orbit_recording.cpp
+    src/gui/recording_controls.cpp
     src/gui/orbit_controls.cpp
     src/gui/cfd_view.cpp
     external/glad/src/glad.c
@@ -131,8 +136,10 @@ add_executable(test_regressions tests/test_regressions.cpp)
 add_test(NAME Test_Numerical_Regressions COMMAND test_regressions)
 add_executable(test_orbit_replay tests/test_orbit_replay.cpp src/gui/orbit_replay.cpp)
 add_test(NAME Test_Orbit_Replay COMMAND test_orbit_replay "${CMAKE_CURRENT_SOURCE_DIR}/assets/orbits")
+add_executable(test_orbit_recording tests/test_orbit_recording.cpp src/gui/orbit_recording.cpp src/gui/orbit_replay.cpp)
+add_test(NAME Test_Orbit_Recording COMMAND test_orbit_recording)
 if(BUILD_GUI)
-    add_executable(test_radio_player tests/test_radio_player.cpp src/gui/music_player.cpp)
+    add_executable(test_radio_player tests/test_radio_player.cpp src/gui/music_player.cpp src/gui/alarm_audio.cpp src/gui/radio_commands.cpp)
     target_include_directories(test_radio_player SYSTEM PRIVATE external/miniaudio)
     if(UNIX AND NOT APPLE)
         target_link_libraries(test_radio_player PRIVATE ${CMAKE_DL_LIBS} pthread m)
