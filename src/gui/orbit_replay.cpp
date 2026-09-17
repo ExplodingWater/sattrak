@@ -39,9 +39,9 @@ double parseOrbitUtc(const std::string& value) {
 }
 std::string formatOrbitUtc(double utc) {
     using namespace std::chrono;
-    auto instant=sys_seconds{seconds{static_cast<long long>(std::floor(utc))}};
+    auto instant=sys_time<microseconds>{microseconds{static_cast<long long>(std::llround(utc*1000000))}};
     auto days=floor<std::chrono::days>(instant);year_month_day date{days};hh_mm_ss time{instant-days};
-    std::ostringstream out;out<<std::setfill('0')<<std::setw(4)<<int(date.year())<<'-'<<std::setw(2)<<unsigned(date.month())<<'-'<<std::setw(2)<<unsigned(date.day())<<'T'<<std::setw(2)<<time.hours().count()<<':'<<std::setw(2)<<time.minutes().count()<<':'<<std::setw(2)<<time.seconds().count()<<'Z';return out.str();
+    std::ostringstream out;out<<std::setfill('0')<<std::setw(4)<<int(date.year())<<'-'<<std::setw(2)<<unsigned(date.month())<<'-'<<std::setw(2)<<unsigned(date.day())<<'T'<<std::setw(2)<<time.hours().count()<<':'<<std::setw(2)<<time.minutes().count()<<':'<<std::setw(2)<<time.seconds().count()<<'.'<<std::setw(6)<<time.subseconds().count()<<'Z';return out.str();
 }
 double earthSiderealAngle(double utc) {
     const double days=utc/86400+2440587.5-2451545.0,T=days/36525;
