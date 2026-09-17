@@ -26,16 +26,19 @@ struct MusicPlayer::Impl {
     ma_engine engine{};
     ma_sound sound{};
     ma_sound radio{};
-    bool radioReady=false,radioEnabled=true;
+    bool radioReady=false,radioEnabled=true,radioMuted=false;
     double radioNext=0,radioStarted=0;
+    float radioVolume=.1f,radioEndAt=-1;
     size_t radioIndex=0;
     std::vector<std::filesystem::path> radioTracks;
+    std::filesystem::path radioFolder;
     std::string radioStatus="No radio recordings installed";
     bool engineReady=false,soundReady=false,paused=false,started=false,fading=false;
     bool betweenTracks=false;
     double nextTrackAt=0;
     std::mt19937 random{std::random_device{}()};
     int volume=100;
+    int masterVolume=100,defaultRadioVolume=10;
     size_t index=0;
     double startAt=0,fadeStart=0,wallTime=0;
     std::vector<std::filesystem::path> tracks;
@@ -48,10 +51,10 @@ struct MusicPlayer::Impl {
         if(engineReady)ma_engine_uninit(&engine);
         if(!volumePreference.empty()) {
             std::ofstream saved(volumePreference);
-            if(saved)saved<<volume<<'\n';
+            if(saved)saved<<volume<<'\n'<<masterVolume<<'\n'<<defaultRadioVolume<<'\n';
         }
     }
-    void scheduleRadio() { radioNext=wallTime+std::uniform_real_distribution<double>(2700,7200)(random); }
+    void scheduleRadio() { radioNext=wallTime+std::uniform_real_distribution<double>(900,1800)(random); }
     void stopRadio() {
         if(radioReady)ma_sound_uninit(&radio);
         radioReady=false;scheduleRadio();radioStatus=radioEnabled?"Waiting for the next recording":"Radio disabled";
@@ -61,6 +64,7 @@ struct MusicPlayer::Impl {
         if(radioReady)ma_sound_uninit(&radio);
         radioReady=false;
         auto path=radioTracks[radioIndex++%radioTracks.size()];
+        radioVolume=defaultRadioVolume/100.0f;radioEndAt=-1;
         if(ma_sound_init_from_file(&engine,path.string().c_str(),MA_SOUND_FLAG_STREAM|MA_SOUND_FLAG_NO_SPATIALIZATION,nullptr,nullptr,&radio)!=MA_SUCCESS){radioStatus="Could not decode "+path.filename().string();scheduleRadio();return;}
         radioReady=true;radioStarted=wallTime;
         ma_sound_set_volume(&radio,0);ma_sound_set_looping(&radio,MA_FALSE);
@@ -68,14 +72,14 @@ struct MusicPlayer::Impl {
         radioStatus=path.stem().string();
     }
     void updateRadio() {
-        if(!radioEnabled||radioTracks.empty())return;
         if(radioReady) {
-            ma_sound_set_volume(&radio,.1f*float(std::clamp((wallTime-radioStarted)/5,0.0,1.0)));
-            if(ma_sound_at_end(&radio))stopRadio();
-        } else if(wallTime>=radioNext)startRadio();
+            ma_sound_set_volume(&radio,radioMuted?0:radioVolume*(masterVolume/100.0f)*float(std::clamp((wallTime-radioStarted)/5,0.0,1.0)));
+            float elapsed=0;ma_sound_get_cursor_in_seconds(&radio,&elapsed);
+            if(ma_sound_at_end(&radio)||(radioEndAt>0&&elapsed>=radioEndAt))stopRadio();
+        } else if(radioEnabled&&!radioTracks.empty()&&wallTime>=radioNext)startRadio();
     }
     void applyVolume(double wallTime) {
-        float gain=float(volume)/100.0f;
+        float gain=(float(volume)/100.0f)*(masterVolume/100.0f);
         if(fading) {
             float fade=float(std::clamp((wallTime-fadeStart)/5.0,0.0,1.0));
             gain*=fade;
@@ -111,6 +115,8 @@ bool MusicPlayer::init(const std::filesystem::path& folder) {
     int savedVolume=100;
     std::ifstream saved(m_impl->volumePreference);
     if(saved>>savedVolume)m_impl->volume=std::clamp(savedVolume,0,200);
+    if(saved>>savedVolume)m_impl->masterVolume=std::clamp(savedVolume,0,200);
+    if(saved>>savedVolume)m_impl->defaultRadioVolume=std::clamp(savedVolume,0,200);
     std::error_code ec;
     if(std::filesystem::exists(folder,ec)) {
         for(const auto& item:std::filesystem::directory_iterator(folder,ec))
@@ -147,6 +153,8 @@ void MusicPlayer::update(double wallTime) {
 }
 bool MusicPlayer::initRadio(const std::filesystem::path& folder) {
     std::error_code ec;
+    m_impl->radioFolder=std::filesystem::weakly_canonical(folder,ec);
+    if(ec)return false;
     if(std::filesystem::exists(folder,ec))for(const auto& item:std::filesystem::directory_iterator(folder,ec))
         if(item.is_regular_file()&&supported(item.path()))m_impl->radioTracks.push_back(item.path());
     if(m_impl->radioTracks.empty())return true;
@@ -156,11 +164,56 @@ bool MusicPlayer::initRadio(const std::filesystem::path& folder) {
 }
 void MusicPlayer::setRadioEnabled(bool enabled){if(enabled==m_impl->radioEnabled)return;m_impl->radioEnabled=enabled;m_impl->stopRadio();}
 bool MusicPlayer::radioEnabled() const{return m_impl->radioEnabled;}
+void MusicPlayer::setRadioMuted(bool muted){m_impl->radioMuted=muted;if(m_impl->radioReady)ma_sound_set_volume(&m_impl->radio,muted?0:m_impl->radioVolume*(m_impl->masterVolume/100.0f)*float(std::clamp((m_impl->wallTime-m_impl->radioStarted)/5,0.0,1.0)));}
+void MusicPlayer::setMasterVolumePercent(int percent){m_impl->masterVolume=std::clamp(percent,0,200);m_impl->applyVolume(m_impl->wallTime);setRadioMuted(m_impl->radioMuted);}
+int MusicPlayer::masterVolumePercent() const{return m_impl->masterVolume;}
+void MusicPlayer::setRadioVolumePercent(int percent){m_impl->defaultRadioVolume=std::clamp(percent,0,200);m_impl->radioVolume=m_impl->defaultRadioVolume/100.0f;setRadioMuted(m_impl->radioMuted);}
+int MusicPlayer::radioVolumePercent() const{return m_impl->defaultRadioVolume;}
+bool MusicPlayer::radioMuted() const{return m_impl->radioMuted;}
 bool MusicPlayer::radioPlaying() const{return m_impl->radioReady;}
 float MusicPlayer::radioGain() const{return m_impl->radioReady?ma_sound_get_volume(&m_impl->radio):0;}
 double MusicPlayer::secondsUntilRadio() const{return (std::max)(0.0,m_impl->radioNext-m_impl->wallTime);}
 const std::string& MusicPlayer::radioStatus() const{return m_impl->radioStatus;}
 void MusicPlayer::playRadioNow(){m_impl->startRadio();}
+bool MusicPlayer::playRadioFile(const std::filesystem::path& requested,float gain,double endAt,std::string& message) {
+    std::error_code ec;
+    if(!std::isfinite(gain)||gain<0||gain>2){message="Volume must be between 0 and 2.";return false;}
+    auto& p=*m_impl;
+    const auto name=requested.string();
+    if(name.empty()||name.find_first_of("/\\:")!=std::string::npos||requested.has_parent_path()||requested.is_absolute()||name=="."||name==".."){message="Use a track number or filename from assets/radio; other paths are not allowed.";return false;}
+    if(p.radioFolder.empty()){message="Radio folder unavailable.";return false;}
+    const bool numbered=std::all_of(name.begin(),name.end(),[](unsigned char c){return c>='0'&&c<='9';});
+    std::filesystem::path path;
+    if(numbered){
+        const auto prefix=(name.size()==1?"0"+name:name)+" - ";
+        for(std::filesystem::directory_iterator it(p.radioFolder,ec),end;!ec&&it!=end;it.increment(ec)){
+            if(it->path().filename().string().starts_with(prefix)&&supported(it->path())){
+                if(!path.empty()){message="Track number is ambiguous; use its full filename.";return false;}path=it->path();
+            }
+        }
+        if(path.empty()){message="No matching radio track number in assets/radio.";return false;}
+    }else path=p.radioFolder/requested;
+    path=std::filesystem::canonical(path,ec);
+    if(ec||path.parent_path()!=p.radioFolder||!supported(path)||!std::filesystem::is_regular_file(path,ec)){message="Audio file missing, unsupported, or outside assets/radio.";return false;}
+    if(!p.engineReady){if(ma_engine_init(nullptr,&p.engine)!=MA_SUCCESS){message="Audio output unavailable.";return false;}p.engineReady=true;}
+    p.stopRadio();
+#ifdef _WIN32
+    auto result=ma_sound_init_from_file_w(&p.engine,path.c_str(),MA_SOUND_FLAG_STREAM|MA_SOUND_FLAG_NO_SPATIALIZATION,nullptr,nullptr,&p.radio);
+#else
+    auto result=ma_sound_init_from_file(&p.engine,path.c_str(),MA_SOUND_FLAG_STREAM|MA_SOUND_FLAG_NO_SPATIALIZATION,nullptr,nullptr,&p.radio);
+#endif
+    if(result!=MA_SUCCESS){message="Could not decode audio file.";return false;}
+    p.radioReady=true;p.radioVolume=gain;p.radioEndAt=-1;p.radioStarted=p.wallTime;
+    float duration=0;ma_sound_get_length_in_seconds(&p.radio,&duration);
+    if(std::isfinite(endAt)&&endAt>0&&endAt<=duration)p.radioEndAt=float(endAt);
+    ma_sound_set_volume(&p.radio,0);ma_sound_set_looping(&p.radio,MA_FALSE);
+    if(ma_sound_start(&p.radio)!=MA_SUCCESS){p.stopRadio();message="Could not start playback.";return false;}
+    p.radioStatus=path.stem().string();message="Playing "+path.filename().string()+" at "+std::to_string(int(gain*100))+"%";
+    if(p.radioMuted)message+=" (radio is muted)";
+    if(p.radioEndAt>0)message+="; stop at "+std::to_string(p.radioEndAt)+" seconds";
+    else message+="; natural end (no valid --endat limit)";
+    return true;
+}
 void MusicPlayer::stopRadio(){m_impl->stopRadio();}
 void MusicPlayer::previous() {
     if(m_impl->tracks.empty())return;
