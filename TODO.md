@@ -11,7 +11,7 @@
 - [ ] Fade in the first song.
 - [ ] Add a player bar at the top: restart/previous, pause/resume, end/next.
 - [ ] Do not include a time bar or seek slider.
-- [x] Record the user's track list and special playback rules in [docs/MUSIC_PLAYLIST.md](docs/MUSIC_PLAYLIST.md).
+- [x] Document bundled music permissions and attribution in [assets/music/CREDITS.md](assets/music/CREDITS.md).
 - [ ] Always fade in Joakuim — End of the winter, regardless of playlist position.
 - [ ] Check permission for each specific recording before bundling it; preliminary findings are in the playlist document.
 

@@ -12,7 +12,7 @@ from plot_shock_validation import validate
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bin-dir", type=Path, required=True)
-    parser.add_argument("--output", type=Path, default=Path("docs/BENCHMARKS.md"))
+    parser.add_argument("--output", type=Path, default=Path("local/reports/BENCHMARKS.md"))
     args = parser.parse_args()
     binaries = args.bin_dir.resolve()
     suffix = ".exe" if platform.system() == "Windows" else ""

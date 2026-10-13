@@ -40,6 +40,11 @@ music_volume.txt
 imgui.ini
 *.ppm
 local/
+# Private planning and generated reports stay out of future commits.
+docs/V1_0.md
+docs/BENCHMARKS.md
+docs/WORKTREE_STATUS.md
+catalog-invalid-test/
 # Credentials and private machine configuration
 .env
 .env.*
