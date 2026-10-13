@@ -5,8 +5,22 @@
 #include <cmath>
 #include <algorithm>
 #include "imgui.h"
+#include "gui/accessibility.hpp"
+#include <sstream>
 
 namespace gui {
+std::string CFDView::textDescription() const {
+    std::ostringstream out;
+    out << "2D compressible flow over a compression ramp. Inflow Mach " << m_machInf
+        << ", ramp " << m_rampAngleDeg << " degrees. " << (m_isPaused ? "Paused." : "Running.");
+    if (m_hasSample) out << "\nDownstream wall sample: Mach " << m_numM2 << ", pressure ratio " << m_numP2P1
+        << ", temperature ratio " << m_numT2T1 << ".";
+    else out << "\nNo downstream sample yet.";
+    if (m_solver) out << "\nScaled residual: " << m_solver->residualNorm() << ".";
+    out << "\nNumerical shock angle is not measured. Colors show relative values in grid-index space.";
+    if (!m_solverError.empty()) out << "\nSolver error: " << m_solverError;
+    return out.str();
+}
 
 CFDView::CFDView() {
 }
@@ -166,6 +180,7 @@ void CFDView::drawFlowfieldViewport() {
 
     ImVec2 viewSize(940, 440);
     ImGui::Image((ImTextureID)(intptr_t)m_flowTexId, viewSize, ImVec2(0, 0), ImVec2(1, 1));
+    ImGui::TextWrapped("%s", textDescription().c_str());
 
     ImGui::End();
 }

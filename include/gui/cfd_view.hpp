@@ -26,6 +26,7 @@ public:
     void update(float dt);
     void drawUI();
     void cleanup();
+    std::string textDescription() const;
 
     void resetSimulation();
 

@@ -61,11 +61,15 @@ set(GUI_SOURCES
     src/gui/alarm_audio.cpp
     src/gui/radio_commands.cpp
     src/gui/developer_console.cpp
+    src/gui/action_bindings.cpp
+    src/gui/interaction_controls.cpp
     src/gui/adcs_view.cpp
     src/gui/multi_view.cpp
     src/gui/orbit_replay.cpp
     src/gui/orbit_recording.cpp
     src/gui/recording_controls.cpp
+    src/gui/display_settings.cpp
+    src/gui/catalog_details.cpp
     src/gui/orbit_controls.cpp
     src/gui/cfd_view.cpp
     external/glad/src/glad.c
@@ -111,6 +115,10 @@ endif()
 add_custom_command(TARGET ag POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/earth_texture.jpg" "$<TARGET_FILE_DIR:ag>/earth_texture.jpg"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/TERMS.md" "$<TARGET_FILE_DIR:ag>/TERMS.md"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE" "$<TARGET_FILE_DIR:ag>/LICENSE"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_CURRENT_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:ag>/assets")
 endif()
@@ -140,6 +148,9 @@ add_executable(test_orbit_recording tests/test_orbit_recording.cpp src/gui/orbit
 add_test(NAME Test_Orbit_Recording COMMAND test_orbit_recording)
 if(BUILD_GUI)
     add_executable(test_radio_player tests/test_radio_player.cpp src/gui/music_player.cpp src/gui/alarm_audio.cpp src/gui/radio_commands.cpp)
+    add_executable(test_research_catalog tests/test_research_catalog.cpp src/gui/research_catalog.cpp)
+    target_link_libraries(test_research_catalog PRIVATE sattrak_sgp4)
+    add_test(NAME Test_Research_Catalog COMMAND test_research_catalog "${CMAKE_CURRENT_SOURCE_DIR}/assets")
     target_include_directories(test_radio_player SYSTEM PRIVATE external/miniaudio)
     if(UNIX AND NOT APPLE)
         target_link_libraries(test_radio_player PRIVATE ${CMAKE_DL_LIBS} pthread m)

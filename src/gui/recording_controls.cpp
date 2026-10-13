@@ -56,14 +56,12 @@ void ADCSView::drawRecordingControls() {
     ImGui::BeginDisabled(m_replayActive||m_recording.active());
     if(ImGui::Button("Record path"))startPathRecording();
     ImGui::EndDisabled();ImGui::SameLine();ImGui::BeginDisabled(!m_recording.active());
-    if(ImGui::Button("Stop recording"))m_recording.stop();ImGui::EndDisabled();
+    if(ImGui::Button("Stop recording"))m_actions.run("recording.stop");ImGui::EndDisabled();
     ImGui::Text("%s | %zu samples",m_recording.active()?"RECORDING":"Stopped",m_recording.count());
     ImGui::TextWrapped("Samples use simulation time (one per second); pausing simulation pauses recording. Files are synthetic ECEF trajectories, not measured satellite data.");
     ImGui::BeginDisabled(m_recording.count()<2||m_recording.active());
     if(ImGui::Button("Save")) {
-        auto destination=m_recording.path();destination.replace_extension(".csv");
-        if(destination==m_recording.path())destination=destination.parent_path()/(destination.stem().string()+"-export.csv");
-        m_recording.save(destination);
+        m_actions.run("recording.save");
     }
 #ifdef _WIN32
     ImGui::SameLine();

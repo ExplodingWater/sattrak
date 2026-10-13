@@ -16,6 +16,8 @@
 #include "gui/orbit_recording.hpp"
 #include "gui/alarm_audio.hpp"
 #include "gui/music_player.hpp"
+#include "gui/display_settings.hpp"
+#include "gui/action_bindings.hpp"
 #include <random>
 #include <future>
 
@@ -76,6 +78,8 @@ public:
     void drawInternetChoice();
     void drawInternetSettings();
     void startCatalogRefresh();
+    void startSatnogsRefresh();
+    void drawCatalogDetails();
     void startPathRecording();
     void findRecoveryRecordings();
     bool hasActivePathRecording() const { return m_recording.active(); }
@@ -89,8 +93,16 @@ public:
     void renderViews(GLFWwindow* mainWindow,float dt);
     void closeDesktopViews();
     void drawUI();
+    void attachDisplay(DisplaySettings& display) { m_display=&display; }
     void attachAudio(MusicPlayer& player) { m_audio=&player; m_alarmAudio.setGain(player.masterVolumePercent()/100.0f); }
     void drawFlightOverlay();
+    ActionBindings& actions() { return m_actions; }
+    void configurePreferences(bool remember);
+    void setMarkerOpacity(float opacity);
+    double cameraAltitudeKm() const;
+    double satelliteAltitudeKm() const;
+    void drawAltimeters();
+    std::string textDescription() const;
     void setCameraPreset(CameraPreset preset) { m_camPreset = preset; }
     void cleanup();
 
@@ -99,6 +111,23 @@ public:
     void onScroll(double yoffset);
 
 private:
+    friend class DeveloperConsole;
+    friend struct ConsoleChecks;
+    friend struct InteractionChecks;
+    ActionBindings m_actions;
+    void registerActions();
+    void saveHudPreferences();
+    bool m_rememberPreferences=false,m_hudVisible=true,m_showAltimeters=true;
+    float m_markerOpacity=1,m_lastMarkerOpacity=1;
+    int m_settingsCategory=0;
+    std::future<std::string> m_satnogsDownload;
+    std::string m_satnogsFolder="assets/satnogs",m_satnogsStatus;
+    bool m_showCatalogStations=true,m_includeOfflineStations=false;
+    bool m_catalogBrowser=false;
+    char m_catalogSearch[128]{};
+    unsigned m_selectedResearch=0;
+    int m_selectedCatalogStation=0;
+    DisplaySettings* m_display=nullptr;
     MusicPlayer* m_audio=nullptr;
     OrbitRecording m_recording;
     double m_recordStartUtc=0,m_recordStartSim=0,m_recordNext=0;
@@ -135,6 +164,9 @@ private:
     int m_viewCount=2;
     GLFWwindow* m_mainWindow=nullptr;
     ViewCamera captureCamera() const;
+    ViewCamera m_preferredCamera;
+    bool m_hasPreferredView=false,m_preferredHud=true,m_preferredTrail=false,m_preferredRealScale=false;
+    float m_preferredMarker=1,m_preferredFov=45;
     void applyCamera(const ViewCamera& camera);
     void enableMultiView(bool enabled);
     void drawMultiViewControls();
@@ -173,9 +205,11 @@ private:
     std::mt19937 m_sensorRandom{42};
     aero::math::Vec3 m_biasWalk;
     void drawResearchAndTrail(const Mat4& viewProj, int width, int height, bool closePass=false);
+    void drawCatalogLayer(const Mat4& viewProj,int width,int height);
     void recordTrail();
     ResearchCatalog m_researchCatalog;
     bool m_researchUnlocked=false, m_showResearch=false, m_showTrail=false;
+    bool m_showStaleResearch=false;
     unsigned m_secretProgress=0;
     double m_discoveryUntil=0;
     struct TrailPoint { aero::math::Vec3 position; bool start; };
@@ -203,6 +237,8 @@ private:
     bool satelliteHiddenByEarth() const;
     bool m_realScale = false;
     bool m_openSettings = false;
+    bool m_settingsVisible = false;
+    float m_cameraFov = 45.0f;
     float m_sensitivity = 0.0035f;
     float m_scrollSensitivity = 1.0f;
     float m_userSpeedKmS = 7.5f;

@@ -6,6 +6,13 @@
 namespace gui {
 // Invoked by --smoke-test while a real OpenGL context is active.
 struct ADCSViewChecks {
+    static void prepareCatalogFrame(ADCSView& view,int frame) {
+        view.m_showResearch=true;view.m_researchUnlocked=true;view.m_showCatalogStations=true;view.m_includeOfflineStations=true;
+        view.m_camPreset=CameraPreset::FreeOrbitArcball;view.m_arcballDist=42;
+        if(frame==0){view.m_selectedResearch=25544;view.m_researchCatalog.epoch=libsgp4::DateTime::Now();}
+        if(frame==8&&!view.m_researchCatalog.stations.empty())view.m_selectedCatalogStation=view.m_researchCatalog.stations.front().id;
+        if(frame==16){view.m_selectedResearch=0;view.m_selectedCatalogStation=0;view.m_openSettings=true;}
+    }
     static void showStartupChoice(ADCSView& view){view.m_askInternet=true;}
     static bool checkDataFallback(ADCSView& view) {
         const auto count=view.m_researchCatalog.satellites.size();
@@ -60,13 +67,21 @@ struct ADCSViewChecks {
     static void prepareModelFrame(ADCSView& view,int frame) {
         if(frame%4!=0)return;
         view.selectModel(2+std::min(frame/4,3));
-        view.setRealScale(frame>=16);
+        view.setRealScale(frame>=12);
         view.m_camPreset=CameraPreset::SatelliteOrbit;
-        view.m_satOrbitDistance=frame>=16?175.0f:8*view.modelFramingScale();
+        // Exercise both sides of the ISS bounding-sphere/near-plane transition.
+        view.m_satOrbitDistance=frame>=16?65.0f:frame>=12?73.0f:8*view.modelFramingScale();
         view.m_satOrbitYaw=0.7f;
         view.m_satOrbitPitch=0.35f;
         view.m_showResearch=false;view.m_showTrail=false;view.m_discoveryUntil=0;
         view.m_alarmMuted=true;
+    }
+    static void prepareIssDepthFrame(ADCSView& view,int frame) {
+        if(frame%4!=0)return;
+        prepareModelFrame(view,16);
+        constexpr float distances[]={73,65,50,25,10};
+        view.m_satOrbitDistance=distances[std::min(frame/4,4)];
+        view.m_isPaused=true; // Compare distance alone, without changing attitude or lighting.
     }
     static void prepareFrame(ADCSView& view, int frame) {
         if(frame==0) {

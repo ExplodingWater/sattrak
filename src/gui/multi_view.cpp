@@ -1,5 +1,6 @@
 #include "gui/adcs_view.hpp"
 #include "gui/numeric_widgets.hpp"
+#include "gui/accessibility.hpp"
 #include "imgui.h"
 #include <algorithm>
 #include <cmath>
@@ -90,10 +91,10 @@ void ADCSView::moveViewCamera(MultiView& v,double dx,double dy,bool right,double
     if(m_camPreset==CameraPreset::SatelliteOrbit)m_satOrbitDistance=std::clamp(m_satOrbitDistance*float(std::exp(-scroll*.12)),.25f,200000.0f);
     if(m_camPreset==CameraPreset::FreeOrbitArcball)m_arcballDist=std::clamp(m_arcballDist*float(std::exp(-scroll*.12)),12.02f,100000.0f);
     if(m_camPreset==CameraPreset::FreeFlycam)m_flycamPos+=m_flyForward*scroll*(m_realScale?m_userSpeedKmS*(12.0/6378.137)*.1:2.5);
-    if(keyboard) {
+    if(keyboard && accessibility::keyboardControlsAllowed(true) && !m_actions.capturing()) {
         auto key=[&](int code){return glfwGetKey(window,code)==GLFW_PRESS?1.0:0.0;};
         const double f=key(GLFW_KEY_W)-key(GLFW_KEY_S),r=key(GLFW_KEY_D)-key(GLFW_KEY_A),u=key(GLFW_KEY_E)-key(GLFW_KEY_Q);
-        if(!ImGui::GetIO().WantTextInput&&!ImGui::IsAnyItemActive()&&!ImGui::IsPopupOpen(nullptr,ImGuiPopupFlags_AnyPopupId|ImGuiPopupFlags_AnyPopupLevel))
+        if(!ImGui::GetIO().WantTextInput&&!ImGui::GetIO().KeyCtrl&&!ImGui::GetIO().KeyAlt&&!m_actions.capturing()&&!ImGui::IsAnyItemActive()&&!ImGui::IsPopupOpen(nullptr,ImGuiPopupFlags_AnyPopupId|ImGuiPopupFlags_AnyPopupLevel))
             lookWithArrows(key(GLFW_KEY_RIGHT)-key(GLFW_KEY_LEFT),key(GLFW_KEY_UP)-key(GLFW_KEY_DOWN),dt);
         if(f||r||u)moveFlycam(f,r,u,key(GLFW_KEY_LEFT_SHIFT)!=0,dt);
     }
@@ -171,12 +172,14 @@ void ADCSView::renderViews(GLFWwindow* mainWindow,float dt) {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize,4);
             char windowLabel[120];snprintf(windowLabel,sizeof(windowLabel),"%s###MultiView%d",label,i);
             if(ImGui::Begin(windowLabel,nullptr,ImGuiWindowFlags_NoCollapse|ImGuiWindowFlags_NoScrollbar)) {
+                ImGui::TextWrapped("3D spacecraft view: %s. F10 returns keyboard control to View 1.", cameraNames[int(v.camera.preset)]);
                 auto size=ImGui::GetContentRegionAvail();
                 renderViewTexture(v,int(size.x*io.DisplayFramebufferScale.x),int(size.y*io.DisplayFramebufferScale.y));
                 ImGui::Image((ImTextureID)(intptr_t)v.texture,size,ImVec2(0,1),ImVec2(1,0));
                 const bool hovered=ImGui::IsItemHovered();
                 const bool dragging=hovered&&(ImGui::IsMouseDown(0)||ImGui::IsMouseDown(1));
-                if(hovered)moveViewCamera(v,dragging?io.MouseDelta.x:0,dragging?io.MouseDelta.y:0,ImGui::IsMouseDown(1),io.MouseWheel,mainWindow,dt,!io.WantTextInput);
+                const bool keyboardTarget = accessibility::flightKeyboardFocus ? i==0 : hovered;
+                if(hovered || keyboardTarget)moveViewCamera(v,dragging?io.MouseDelta.x:0,dragging?io.MouseDelta.y:0,ImGui::IsMouseDown(1),hovered?io.MouseWheel:0,mainWindow,dt,keyboardTarget);
             }
             ImGui::End();ImGui::PopStyleVar();ImGui::PopStyleColor();
         }

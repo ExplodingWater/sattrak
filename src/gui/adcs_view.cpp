@@ -1,6 +1,7 @@
 #include "gui/adcs_view.hpp"
 #include "gui/slew_profile.hpp"
 #include "gui/numeric_widgets.hpp"
+#include "gui/accessibility.hpp"
 #include <iostream>
 #include <iomanip>
 #include <cmath>
@@ -35,7 +36,7 @@ static void savePanelLayout() {
     std::ofstream file("panel_layout.txt");
     for (bool value : detachedPanels()) file << value << ' ';
 }
-static void beginEdgePanel(const char* name, int index) {
+static void beginEdgePanel(const char* name, int index, float bottomReserve=0) {
     auto& detached = detachedPanels()[index];
     ImGuiWindow* existing = ImGui::FindWindowByName(name);
     if (!detached && existing && GImGui->MovingWindow == existing &&
@@ -44,20 +45,22 @@ static void beginEdgePanel(const char* name, int index) {
         savePanelLayout();
     }
     const ImVec2 display = ImGui::GetIO().DisplaySize;
-    const float width = std::max(120.0f, std::min(360.0f, (display.x - 30.0f) * 0.45f));
-    const float available = std::max(100.0f, display.y - 55.0f);
+    const float scale=ImGui::GetStyle().FontScaleMain;
+    const float top=std::max(45.0f,ImGui::GetFrameHeight()+20);
+    const float width = std::max(120.0f, std::min(360.0f*scale, (display.x - 30.0f) * 0.45f));
+    const float available = std::max(100.0f, display.y - top - 10);
     const bool right = index >= 2;
     const bool lower = index == 1 || index == 3;
     const float upper = available * (right ? 0.68f : 0.44f);
     if (!detached) {
         ImGui::SetNextWindowPos(ImVec2(right ? display.x - width - 10 : 10,
-                                      lower ? 45 + upper + 10 : 45), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(width, lower ? available - upper - 10 : upper), ImGuiCond_Always);
+                                      lower ? top + upper + 10 : top), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(width, lower ? std::max(60.f,available - upper - 10 - bottomReserve) : upper), ImGuiCond_Always);
     }
     ImGui::Begin(name, nullptr, detached ? ImGuiWindowFlags_None : ImGuiWindowFlags_NoResize);
 }
 static void explain(const char* text) {
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal | ImGuiHoveredFlags_NoSharedDelay)) {
+    if (ImGui::IsItemFocused() || ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal | ImGuiHoveredFlags_NoSharedDelay)) {
         ImGui::BeginTooltip();
         ImGui::PushTextWrapPos(ImGui::GetFontSize() * 26);
         ImGui::TextUnformatted(text);
@@ -126,8 +129,13 @@ uniform vec4 uColor;
 uniform vec3 uSunDir;
 uniform vec3 uViewPos;
 uniform float uRoughness;
+uniform bool uLocalDepth;
 
 void main() {
+    // Perspective depth loses precision when the camera enters a large model's
+    // bounding sphere. Logarithmic fragment depth retains thin surface layers
+    // even with a millimeter near plane. gl_FragCoord.w is the reciprocal eye depth.
+    gl_FragDepth = uLocalDepth ? log2(1.0 + 1.0 / gl_FragCoord.w) / log2(1.0 + 1.0e10) : gl_FragCoord.z;
     vec3 norm = normalize(vNormal);
     vec3 lightDir = normalize(uSunDir);
 
@@ -164,14 +172,16 @@ static const char* fragmentShaderLine = R"(
 #version 330 core
 out vec4 FragColor;
 uniform vec4 uColor;
+uniform bool uLocalDepth;
 
 void main() {
+    gl_FragDepth = uLocalDepth ? log2(1.0 + 1.0 / gl_FragCoord.w) / log2(1.0 + 1.0e10) : gl_FragCoord.z;
     FragColor = uColor;
 }
 )";
 
 
-static const char* atmosphereFragment = R"(
+static const char* atmosphereFragment = R"( // Oh My God Bruh
 #version 330 core
 in vec3 vFragPos;
 out vec4 FragColor;
@@ -297,6 +307,7 @@ bool ADCSView::init() {
     }
 
     m_researchCatalog.load("assets/catalog");
+    m_researchCatalog.mergeSatnogs(m_satnogsFolder,m_satnogsStatus);
     std::ifstream discovered("research_mode_unlocked.txt");
     int unlocked=0; if(discovered>>unlocked) m_researchUnlocked=unlocked==1;
     m_satPosECI={EARTH_RADIUS_3D+m_orbitAltitudeKm*KM_TO_3D,0,0};
@@ -351,11 +362,17 @@ void ADCSView::handleInput(GLFWwindow* window, float dt) {
         m_isRightClickDragging = false;
     }
 
-    // UI keyboard navigation retains focus after a click. Only an active editor,
-    // widget, or popup owns movement keys; merely focusing a panel does not.
-    if ((sceneInput || m_isRightClickDragging) && !io.WantTextInput && !ImGui::IsAnyItemActive()
-        && !ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel)) {
+    // Keyboard flight focus does not depend on the mouse position. UI navigation
+    // owns arrows and Space while a control is focused.
+    if (accessibility::keyboardControlsAllowed(sceneInput || m_isRightClickDragging) && !m_actions.capturing()) {
         auto key = [&](int k) { return glfwGetKey(window, k) == GLFW_PRESS ? 1.0 : 0.0; };
+        const double zoom = key(GLFW_KEY_PAGE_UP) - key(GLFW_KEY_PAGE_DOWN);
+        if (zoom != 0) {
+            const float factor = float(std::exp(-zoom * dt));
+            if (m_camPreset == CameraPreset::SatelliteOrbit) m_satOrbitDistance = std::clamp(m_satOrbitDistance * factor, .25f, 200000.f);
+            else if (m_camPreset == CameraPreset::FreeOrbitArcball) m_arcballDist = std::clamp(m_arcballDist * factor, 13.5f, 150.f);
+            else moveFlycam(zoom,0,0,false,dt);
+        }
         lookWithArrows(key(GLFW_KEY_RIGHT)-key(GLFW_KEY_LEFT),key(GLFW_KEY_UP)-key(GLFW_KEY_DOWN),dt);
         moveFlycam(key(GLFW_KEY_W)-key(GLFW_KEY_S), key(GLFW_KEY_D)-key(GLFW_KEY_A),
             std::max(key(GLFW_KEY_E), key(GLFW_KEY_SPACE))-std::max(key(GLFW_KEY_Q), key(GLFW_KEY_C)),
@@ -496,7 +513,7 @@ void ADCSView::advancePhysics(double dt) {
         m_numericalState=next;m_currentOrbit=next;
         m_satPosECI=orbitToScene(next.position);m_orbitAltitudeKm=next.position.norm()-6378.137;
     } else {
-    // 1. Orbital Kinematics (Keplerian circular orbit in ECI)
+    // Orbital Kinematics (Keplerian circular orbit in ECI)
     double rKm = 6378.137 + m_orbitAltitudeKm;
     double r3D = EARTH_RADIUS_3D + m_orbitAltitudeKm * KM_TO_3D;
     double orbSpeed = std::sqrt(398600.44 / (rKm * rKm * rKm));
@@ -510,7 +527,7 @@ void ADCSView::advancePhysics(double dt) {
     }
     recordTrail();
 
-    // 2. Earth Diurnal Spin (if auto spin enabled)
+    // Earth diurnal spin (if auto spin is already enabled)
     if (m_autoEarthSpin) {
         double baseSpin = aero::constants::EARTH_OMEGA;
         m_earthSpinAngleRad += baseSpin * dt * m_earthSpinWarp;
@@ -523,7 +540,7 @@ void ADCSView::advancePhysics(double dt) {
     captureOrbitSample();
     computeLineOfSight();
 
-    // 3. Closed-loop Pointing to Ground Target
+    // Closed-loop pointing to ground target
     aero::math::Vec3 losVec = (m_targetPosECI - m_satPosECI).normalized();
     aero::math::Vec3 zAxis(0, 0, 1);
     aero::math::Vec3 rotAxis = zAxis.cross(losVec);
@@ -535,31 +552,31 @@ void ADCSView::advancePhysics(double dt) {
         qTarget = aero::adcs::Quaternion::fromRotationVector(rotAxis.normalized() * angle);
     } else if(cosTheta<0)qTarget=aero::adcs::Quaternion::fromRotationVector({3.141592653589793,0,0});
 
-    // Reaction Wheel Controller Torque
+    // Reaction wheel controller torque
     aero::math::Vec3 tauCmd = m_controller.computeControlTorque(m_satState.q, m_satState.omega, qTarget);
     const double slewRateDeg=m_customSlew?m_maxSlew:(m_selectedModel==2?0.1:0.25);
     const double slewAccelerationDeg=m_customSlew?m_slewAcceleration:0.02;
-    constexpr double rad=3.141592653589793/180;
+    constexpr double rad=3.141592653589793/180;6
     if(m_realScale && !m_quickReposition) {
         auto acceleration=slewAcceleration(m_satState.q,m_satState.omega,qTarget,slewRateDeg*rad,slewAccelerationDeg*rad);
         const auto& inertia=m_dynamics.parameters().inertia;
         tauCmd=inertia*acceleration+m_satState.omega.cross(inertia*m_satState.omega+m_satState.hWheel);
     }
 
-    // Step Spacecraft Dynamics
+    // step Dynamics for spacecraft attitude (quaternion + angular velocity + wheel momentum)
     auto disturbance=m_gravityGradient?m_dynamics.computeGravityGradient(m_satPosECI.norm()/KM_TO_3D*1000,m_satState.q.rotate(m_satPosECI.normalized())):aero::math::Vec3::zero();
     auto nextState=m_dynamics.step(m_satState, disturbance, tauCmd, dt);
     if(!std::isfinite(nextState.omega.norm())||nextState.omega.norm()>1000){m_isPaused=true;m_expertMessage="Attitude integration became unstable; reduce torque or timestep.";return;}
     m_satState=nextState;
 
-    // MEKF Estimation
+    // MEKF est
     aero::math::Vec3 gyroNoise,vectorNoise;
     if(m_sensorNoise){std::normal_distribution<double> normal;
         for(int i=0;i<3;++i){gyroNoise[i]=normal(m_sensorRandom)*m_gyroNoise/std::sqrt(dt);m_biasWalk[i]+=normal(m_sensorRandom)*m_biasDrift*std::sqrt(dt);vectorNoise[i]=normal(m_sensorRandom)*m_vectorNoise;}}
     m_mekf.predict(m_satState.omega + m_trueGyroBias + (m_sensorNoise?m_biasWalk:aero::math::Vec3{})+gyroNoise, dt);
     m_mekf.updateVector((m_satState.q.rotate(aero::math::Vec3(0, 0, 1))+vectorNoise).normalized(), aero::math::Vec3(0, 0, 1), m_vectorNoise);
 
-    // Attitude Error
+    // Attitude error
     aero::adcs::Quaternion qErr = qTarget.inverse() * m_satState.q;
     if (qErr.w < 0.0) {
         qErr = aero::adcs::Quaternion(-qErr.w, -qErr.x, -qErr.y, -qErr.z);
@@ -571,7 +588,7 @@ void ADCSView::advancePhysics(double dt) {
     m_repositionEtaSec=m_pointingSettledSec>=3?0:m_slewErrorDeg/etaRate+
         (m_realScale&&!m_quickReposition?(etaRate+std::max(0.0,m_bodyRateNormDegS-etaRate))/slewAccelerationDeg:1)+std::max(0.0,3-m_pointingSettledSec);
 
-    // Record Telemetry History
+    // Telemetry buffers for plotting
     float tSec = (float)m_simTimeSec;
     m_bufOmegaNorm.addPoint(tSec, (float)m_bodyRateNormDegS);
     m_bufOmegaX.addPoint(tSec, (float)(m_satState.omega.x * 180.0 / 3.14159));
@@ -586,8 +603,8 @@ void ADCSView::advancePhysics(double dt) {
 
     m_bufSlewError.addPoint(tSec, (float)m_slewErrorDeg);
 
-    if(m_replayActive)return; // Replay history is rebuilt from timestamped samples on seek.
-    // 2D ECEF Ground Track
+    if(m_replayActive)return; // Replay history is rebuilt from timestamped samples on seek
+    // 2D ECEF ground track
     float cInv = std::cos(-(float)m_earthSpinAngleRad);
     float sInv = std::sin(-(float)m_earthSpinAngleRad);
     aero::math::Vec3 satECEF(
@@ -621,9 +638,11 @@ void ADCSView::render3D(int width, int height) {
     glViewport(0, 0, width, height);
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
+    m_shader3D.use();m_shader3D.setInt("uLocalDepth",0);
+    m_lineShader.use();m_lineShader.setInt("uLocalDepth",0);
 
     float aspect = (float)width / (float)(height > 0 ? height : 1);
-    Mat4 proj = Mat4::perspective(45.0f * (3.14159265f / 180.0f), aspect, 0.1f, 1000.0f);
+    Mat4 proj = Mat4::perspective(m_cameraFov * (3.14159265f / 180.0f), aspect, 0.1f, 1000.0f);
 
     aero::math::Vec3 camEye;
     aero::math::Vec3 camTarget;
@@ -689,7 +708,7 @@ void ADCSView::render3D(int width, int height) {
     m_cameraUp = m_cameraForward.cross(camUp).normalized().cross(m_cameraForward).normalized();
     // World units are ~531 km: a fixed 0.1 near plane cut away nearby Earth.
     const float nearEarth = float(std::clamp((camEye.norm()-EARTH_RADIUS_3D)*0.05, 1e-6, 0.1));
-    proj = Mat4::perspective(45.0f * 3.14159265f / 180.0f, aspect, nearEarth,
+    proj = Mat4::perspective(m_cameraFov * 3.14159265f / 180.0f, aspect, nearEarth,
         float(std::max(1000.0, camEye.norm()+2*EARTH_RADIUS_3D)));
     Mat4 view = Mat4::lookAt(camEye, camTarget, camUp);
     Mat4 viewProj = Mat4::multiply(proj, view);
@@ -770,8 +789,10 @@ void ADCSView::render3D(int width, int height) {
         // beyond the near plane while giving close, layered geometry more depth precision.
         const double nearest=-localEye.dot(m_cameraForward)-radius;
         const float nearSatellite=float(std::clamp(nearest*.8,.001,1.0e8));
-        viewProj = Mat4::multiply(Mat4::perspective(45.0f * 3.14159265f / 180.0f, aspect, nearSatellite, 1.0e10f), localView);
+        viewProj = Mat4::multiply(Mat4::perspective(m_cameraFov * 3.14159265f / 180.0f, aspect, nearSatellite, 1.0e10f), localView);
         glClear(GL_DEPTH_BUFFER_BIT);
+        m_lineShader.use();m_lineShader.setInt("uLocalDepth",1);
+        m_shader3D.use();m_shader3D.setInt("uLocalDepth",1);
         m_shader3D.setVec3("uViewPos", float(localEye[0]), float(localEye[1]), float(localEye[2]));
     }
 
@@ -819,9 +840,9 @@ void ADCSView::render3D(int width, int height) {
     drawReentry(viewProj, satModel, height);
     if(m_realScale) drawResearchAndTrail(viewProj,width,height,true);
 
-    if (m_realScale) return; // No oversized guide laser in the physical-scale view.
+    if (m_realScale) return; // No oversized guide laser in the physical-scale view
 
-    // 4. Laser Tracking Beam from Muzzle (GREEN when visible, RED when occulted)
+    // 4. Laser tracking beam from Muzzle (Green when visible and red when occulted)
     m_lineShader.use();
     m_lineShader.setMat4("uMVP", viewProj);
 
@@ -898,7 +919,7 @@ void ADCSView::selectModel(int model) {
     std::ofstream("satellite_model.txt") << model;
 }
 
-// Visual engineering estimate, not coupled aerothermochemical CFD.
+// Visual engineering estimate, not coupled aerothermochemical CFD
 void ADCSView::updateReentry() {
     using aero::math::Vec3;
     double density=atmosphereDensity(m_orbitAltitudeKm)*(m_numericalOrbit&&!m_replayActive?m_orbitForces.densityScale:1);
@@ -946,8 +967,9 @@ layout(location=0) in vec3 p; layout(location=1) in float heat;
 uniform mat4 uMVP; uniform float uSize; out float glow;
 void main(){gl_Position=uMVP*vec4(p,1);gl_PointSize=clamp(uSize/max(gl_Position.w,.01),2,100);glow=heat;})";
         const char* fs=R"(#version 330 core
-in float glow; out vec4 color;
+in float glow; out vec4 color; uniform bool uLocalDepth;
 void main(){float r=length(gl_PointCoord-vec2(.5))*2;if(r>1)discard;
+gl_FragDepth=uLocalDepth?log2(1.0+1.0/gl_FragCoord.w)/log2(1.0+1.0e10):gl_FragCoord.z;
 color=vec4(mix(vec3(1,.12,.01),vec3(1,.8,.35),glow),pow(1-r,2)*.6*glow);})";
         if(!m_entryShader.loadFromSource(vs,fs))return;
         glGenVertexArrays(1,&m_entryVao);glGenBuffers(1,&m_entryVbo);
@@ -971,6 +993,7 @@ color=vec4(mix(vec3(1,.12,.01),vec3(1,.8,.35),glow),pow(1-r,2)*.6*glow);})";
         }
     }
     m_entryShader.use();m_entryShader.setMat4("uMVP",Mat4::multiply(viewProj,satModel));
+    m_entryShader.setInt("uLocalDepth",m_realScale);
     m_entryShader.setFloat("uSize",float(height*radius*.10*(!m_realScale?overviewModelScale():1)));
     glBindVertexArray(m_entryVao);glBindBuffer(GL_ARRAY_BUFFER,m_entryVbo);
     glBufferData(GL_ARRAY_BUFFER,particles.size()*sizeof(float),particles.data(),GL_STREAM_DRAW);
@@ -1034,40 +1057,11 @@ void ADCSView::drawResearchAndTrail(const Mat4& vp,int width,int height,bool clo
         double disc=b*b-c;if(disc<0)return false;
         double hit=-b-std::sqrt(disc);return hit>0 && hit<length;
     };
-    if(!closePass && m_showResearch && m_researchUnlocked) {
-        std::vector<float> points; m_catalogRendered=0;
-        std::string hover;float nearest=100;
-        auto mouse=ImGui::GetIO().MousePos;
-        for(size_t i=0;i<m_researchCatalog.satellites.size();++i) {
-            Vec3 p;if(!m_researchCatalog.position(i,m_simTimeSec,p))continue;
-            p=p*KM_TO_3D;double c=std::cos(m_earthSpinAngleRad),s=std::sin(m_earthSpinAngleRad);
-            p={c*p.x+s*p.z,p.y,-s*p.x+c*p.z};
-            points.insert(points.end(),{float(p.x),float(p.y),float(p.z)});++m_catalogRendered;
-            double clip[4]{};for(int row=0;row<4;++row)clip[row]=vp.m[row]*p.x+vp.m[4+row]*p.y+vp.m[8+row]*p.z+vp.m[12+row];
-            if(clip[3]>0 && !occulted(p)) {
-                float x=float((clip[0]/clip[3]*.5+.5)*width),y=float((.5-clip[1]/clip[3]*.5)*height);
-                // Framebuffer to ImGui coordinates (also works on high-DPI displays).
-                x*=ImGui::GetIO().DisplaySize.x/width;y*=ImGui::GetIO().DisplaySize.y/height;
-                float distance=(x-mouse.x)*(x-mouse.x)+(y-mouse.y)*(y-mouse.y);
-                if(distance<nearest){nearest=distance;hover=m_researchCatalog.satellites[i].name+" | NORAD "+std::to_string(m_researchCatalog.satellites[i].norad);}
-            }
-        }
-        m_lineShader.use();m_lineShader.setMat4("uMVP",vp);m_lineShader.setVec4("uColor",.35f,.85f,1,1);
-        glBindVertexArray(m_lineVao);glBindBuffer(GL_ARRAY_BUFFER,m_lineVbo);
-        glBufferData(GL_ARRAY_BUFFER,std::max(size_t(3072),points.size())*sizeof(float),nullptr,GL_DYNAMIC_DRAW);
-        if(!points.empty())glBufferSubData(GL_ARRAY_BUFFER,0,points.size()*sizeof(float),points.data());
-        glPointSize(5);glDrawArrays(GL_POINTS,0,GLsizei(points.size()/3));glPointSize(1);glBindVertexArray(0);
-        if(!m_renderingMulti && !hover.empty() && sceneAcceptsInput()) {
-            auto* draw=ImGui::GetForegroundDrawList();auto extent=ImGui::CalcTextSize(hover.c_str());
-            ImVec2 at(std::max(8.0f,std::min(mouse.x+12,ImGui::GetIO().DisplaySize.x-extent.x-8)),std::max(8.0f,mouse.y-25));
-            draw->AddRectFilled({at.x-4,at.y-3},{at.x+extent.x+4,at.y+extent.y+3},IM_COL32(0,0,0,225),3);
-            draw->AddText(at,IM_COL32(160,230,255,255),hover.c_str());
-        }
-    }
+    if(!closePass && m_showResearch && m_researchUnlocked)drawCatalogLayer(vp,width,height);
     if(!m_showTrail || m_trail.size()<1 || (m_realScale!=closePass))return;
     if(!m_historyVao) {
         if(!m_ribbonShader.loadFromSource("#version 330 core\nlayout(location=0)in vec4 clip;void main(){gl_Position=clip;}",
-            "#version 330 core\nout vec4 color;void main(){color=vec4(.55,1,.65,1);}"))return;
+            "#version 330 core\nout vec4 color;uniform bool uLocalDepth;void main(){gl_FragDepth=uLocalDepth?log2(1.0+1.0/gl_FragCoord.w)/log2(1.0+1.0e10):gl_FragCoord.z;color=vec4(.55,1,.65,1);}"))return;
         glGenVertexArrays(1,&m_historyVao);glGenBuffers(1,&m_historyVbo);
         glBindVertexArray(m_historyVao);glBindBuffer(GL_ARRAY_BUFFER,m_historyVbo);
         glEnableVertexAttribArray(0);glVertexAttribPointer(0,4,GL_FLOAT,GL_FALSE,4*sizeof(float),nullptr);
@@ -1092,27 +1086,85 @@ void ADCSView::drawResearchAndTrail(const Mat4& vp,int width,int height,bool clo
     for(size_t i=1;i<m_trail.size();++i)if(!m_trail[i].start)segment(m_trail[i-1].position,m_trail[i].position);
     segment(m_trail.back().position,m_satPosECI);
     m_ribbonShader.use();glBindVertexArray(m_historyVao);glBindBuffer(GL_ARRAY_BUFFER,m_historyVbo);
+    m_ribbonShader.setInt("uLocalDepth",closePass);
     glBufferData(GL_ARRAY_BUFFER,vertices.size()*sizeof(float),vertices.data(),GL_STREAM_DRAW);
     glDrawArrays(GL_TRIANGLES,0,GLsizei(vertices.size()/4));glBindVertexArray(0);
 }
 
 void ADCSView::drawSettings() {
-    if (m_openSettings) { ImGui::OpenPopup("Camera & simulation settings"); m_openSettings = false; }
-    ImGui::SetNextWindowSize(ImVec2(std::min(640.0f, ImGui::GetIO().DisplaySize.x-24), std::min(760.0f,ImGui::GetIO().DisplaySize.y-70)), ImGuiCond_Appearing);
-    bool open = true;
-    if (ImGui::BeginPopupModal("Camera & simulation settings", &open)) {
-        ImGui::PushItemWidth(220);
-        if(ImGui::Button("About",ImVec2(-1,28)))ImGui::OpenPopup("About sattrak");
-        if(ImGui::BeginPopupModal("About sattrak",nullptr,ImGuiWindowFlags_AlwaysAutoResize)) {
-            ImGui::Text("sattrak");
-            ImGui::Separator();
-            ImGui::Text("Martin Hafizi | ExplodingWater");
-            ImGui::TextLinkOpenURL("github.com/ExplodingWater","https://github.com/ExplodingWater");
-            ImGui::Text("Made with love.");
-            ImGui::Text("Satellite tracking, orbital dynamics and aerospace simulation.");
-            if(ImGui::Button("Back to Settings",ImVec2(-1,28)))ImGui::CloseCurrentPopup();
-            ImGui::EndPopup();
+    if (m_openSettings) { m_settingsVisible=true; ImGui::SetNextWindowFocus(); m_openSettings=false; }
+    if (!m_settingsVisible) { m_actions.cancelCapture(); return; }
+    const auto available=ImGui::GetIO().DisplaySize;
+    const float scale=ImGui::GetStyle().FontScaleMain;
+    ImGui::SetNextWindowSize(ImVec2(std::min(1000.f*scale,available.x-24),std::min(760.f*scale,available.y-60)),ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImVec2(available.x*.5f,available.y*.5f),ImGuiCond_FirstUseEver,ImVec2(.5f,.5f));
+    ImGui::SetNextWindowSizeConstraints(ImVec2(std::min(560.f,available.x-24),std::min(360.f,available.y-60)),ImVec2(available.x-24,available.y-60));
+    ImGui::SetNextWindowBgAlpha(.99f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2(0,0));
+    const bool settingsContent=ImGui::Begin("Settings###Camera & simulation settings", &m_settingsVisible);
+    ImGui::PopStyleVar();
+    if (settingsContent) {
+        const auto position=ImGui::GetWindowPos(),size=ImGui::GetWindowSize();
+        ImGui::SetWindowPos(ImVec2(std::clamp(position.x,0.f,std::max(0.f,available.x-size.x)),std::clamp(position.y,24.f,std::max(24.f,available.y-size.y))));
+        const char* categories[]={"General","Video","Controls","Advanced"};
+        const float sidebar=ImGui::GetContentRegionAvail().x*.20f;
+        ImGui::PushStyleColor(ImGuiCol_ChildBg,ImVec4(.055f,.08f,.12f,1));
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,0);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2(14*scale,18*scale));
+        ImGui::BeginChild("Settings navigation",ImVec2(sidebar,0),ImGuiChildFlags_AlwaysUseWindowPadding);
+        for(int i=0;i<4;++i)if(ImGui::Selectable(categories[i],m_settingsCategory==i,0,ImVec2(0,32*scale))){m_settingsCategory=i;m_actions.cancelCapture();}
+        ImGui::EndChild();ImGui::PopStyleVar(2);ImGui::PopStyleColor();
+        ImGui::SameLine(0,0);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2(18*scale,18*scale));
+        ImGui::BeginChild(categories[m_settingsCategory],ImVec2(0,0),ImGuiChildFlags_AlwaysUseWindowPadding);
+        ImGui::PopStyleVar();
+        ImGui::SeparatorText(categories[m_settingsCategory]);
+        ImGui::PushItemWidth(std::min(260.f*scale,ImGui::GetContentRegionAvail().x*.48f));
+        if(m_settingsCategory==0) {
+        ImGui::TextWrapped("Spacecraft, simulation, sound and satellite data.");
+        const char* names[]={"Low poly","Landsat 8","Hubble Space Telescope","Terra","GOES-R","International Space Station"};
+        if (ImGui::BeginCombo("Satellite model", names[m_selectedModel])) {
+            for(int i=0;i<6;++i) {
+                const bool missing=i==1?m_landsatModel.parts.empty():i>=2?m_additionalModels[i-2].parts.empty():false;
+                ImGui::BeginDisabled(missing);
+                if(ImGui::Selectable(names[i],m_selectedModel==i))selectModel(i);
+                ImGui::EndDisabled();
+            }
+            ImGui::EndCombo();
         }
+        explain("Choose a locally stored spacecraft. Switching updates geometry and camera framing while preserving the orbit and control simulation.");
+        if (m_selectedModel == 1) ImGui::TextDisabled("Model: NASA / Christopher R. Meaney");
+        if (m_selectedModel >= 2) ImGui::TextDisabled(m_selectedModel==3?"Model: NASA / Christian A. Lopez":"Model: NASA");
+        if (m_landsatModel.parts.empty()) ImGui::TextWrapped("Landsat 8 model could not be loaded.");
+        ImGui::Separator();
+        bool realScale = m_realScale;
+        if (ImGui::Checkbox("1:1 physical scale & real time", &realScale)) setRealScale(realScale);
+        explain("Earth and orbit retain their physical dimensions. The selected spacecraft uses meter-scale geometry. One real second advances one simulation second.");
+        ImGui::TextWrapped(m_selectedModel == 0
+            ? "Earth radius: 6,378 km. Satellite bus: 0.7 x 0.7 x 1.2 m; wingspan: about 4.2 m."
+            : "Earth radius: 6,378 km. Detailed spacecraft use meter-scale geometry; Terra's source units are calibrated to its 6.8 m bus. Model selection does not change mass, inertia or orbital elements.");
+        ImGui::BeginDisabled(!m_realScale);
+        ImGui::BeginDisabled(m_replayActive||m_numericalOrbit);
+        sliderFloatExact("Satellite speed", &m_satelliteSpeedFactor, 0.0f, 20.0f, "%.2fx circular orbit", "%.2f");
+        explain("One is the circular-orbit speed at this altitude. Zero holds orbital position; other values override orbital motion for experimentation without changing the simulation clock or Earth rotation.");
+        double orbitalSpeed = m_replayActive||m_numericalOrbit?m_currentOrbit.velocity.norm():std::sqrt(398600.44 / (6378.137 + m_orbitAltitudeKm));
+        ImGui::Text("Satellite: %.3f km/s", orbitalSpeed * m_satelliteSpeedFactor);
+        if (ImGui::Button("Reset speeds to orbital speed")) {
+            m_satelliteSpeedFactor = 1;
+            m_userSpeedKmS = float(orbitalSpeed);
+        }
+        ImGui::EndDisabled();
+        if (ImGui::Button("Go beside satellite (20 m)")) {
+            m_camPreset = CameraPreset::FreeFlycam;
+            m_flycamPos = m_satPosECI + m_satPosECI.normalized() * (20 * spacecraftScale());
+            m_flyForward = (m_satPosECI - m_flycamPos).normalized();
+            auto up = std::abs(m_flyForward[1]) < 0.9 ? aero::math::Vec3(0,1,0) : aero::math::Vec3(1,0,0);
+            m_flyUp = m_flyForward.cross(up).normalized().cross(m_flyForward);
+            m_settingsVisible=false;
+        }
+        explain("Place the free camera 20 meters above the satellite. It continues moving at the selected speed; set satellite speed to zero to inspect it at rest.");
+        ImGui::EndDisabled();
+        ImGui::TextWrapped("WASD: fly | E/Q: rise/descend | Shift: boost. Move the pointer onto the 3D scene. Use arrow keys or hold right mouse to look.");
         if(m_audio) {
             ImGui::SeparatorText("Audio");
             float master=float(m_audio->masterVolumePercent()),radio=float(m_audio->radioVolumePercent());
@@ -1130,17 +1182,60 @@ void ADCSView::drawSettings() {
             ImGui::EndDisabled();
         }
         drawInternetSettings();
-        ImGui::Checkbox("Satellite trail since t=0", &m_showTrail);
-        explain("Light-green flight history recorded from simulation start, even while hidden. Older samples are progressively simplified. It gets visually thinner nearby. Position jumps start a new segment.");
         if(m_researchUnlocked) {
             ImGui::BeginDisabled(m_researchCatalog.satellites.empty());
             ImGui::Checkbox("Research satellites", &m_showResearch);
+            if(m_showResearch) {
+                ImGui::Checkbox("Inspect stale orbital predictions",&m_showStaleResearch);
+                ImGui::TextWrapped("Predictions more than 14 days from their element epoch are hidden by default. Inspection can show unreliable motion; physically invalid states remain hidden.");
+                ImGui::Checkbox("SatNOGS ground stations (red)",&m_showCatalogStations);
+                if(m_showCatalogStations)ImGui::Checkbox("Include offline / testing stations",&m_includeOfflineStations);
+                if(ImGui::Button("Browse satellite details"))m_catalogBrowser=true;
+                ImGui::TextWrapped("Click a cyan satellite square for details. Its name stays pinned while the information window is open. Red markers are SatNOGS ground stations.");
+            }
             ImGui::EndDisabled();
             ImGui::TextWrapped("%s",m_researchCatalog.status.c_str());
-            ImGui::TextWrapped("CelesTrak: science, Earth resources and weather. Hover a dot for its name. Prediction starts at session UTC and advances with simulation time. Older elements are less reliable; not live tracking.");
+            ImGui::TextWrapped("CelesTrak and SatNOGS orbital elements. Prediction starts at session UTC and advances with simulation time. Older elements are less reliable; not live tracking.");
             if(m_simTimeSec>7*86400) ImGui::TextWrapped("Orbital predictions become less reliable far from the catalog date.");
         }
+        if(ImGui::Button("About",ImVec2(-1,28)))ImGui::OpenPopup("About sattrak");
+        if(ImGui::BeginPopupModal("About sattrak",nullptr,ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("sattrak");
+            ImGui::Separator();
+            ImGui::Text("Martin Hafizi | ExplodingWater");
+            ImGui::TextLinkOpenURL("github.com/ExplodingWater","https://github.com/ExplodingWater");
+            ImGui::Text("Satellite tracking, orbital dynamics and aerospace simulation.");
+            ImGui::Text("Made with Love (and OpenGL)");
+            if(ImGui::Button("Back to Settings",ImVec2(-1,28)))ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+        }
+
+        } else if(m_settingsCategory==1) {
+        ImGui::SeparatorText("Camera and overlays");
+        sliderFloatExact("Field of view",&m_cameraFov,10,120,"%.0f deg","%.0f");
+        if(sliderFloatExact("Spacecraft marker opacity",&m_markerOpacity,0,1,"%.2f","%.2f"))setMarkerOpacity(m_markerOpacity);
+        explain("Fades the spacecraft circle, label and label background together. Zero hides them. Range is camera-to-spacecraft distance, not altitude.");
+        ImGui::Checkbox("Show HUD panels",&m_hudVisible);
+        if(ImGui::Checkbox("Show camera and satellite altimeters",&m_showAltimeters))saveHudPreferences();
+        explain("Height above the simulation's spherical Earth surface (radius 6,378.137 km). Includes free camera motion and imported orbits. Not terrain clearance.");
+        ImGui::Checkbox("Satellite trail since t=0",&m_showTrail);
+        if(m_display)m_display->draw();
+        } else if(m_settingsCategory==2) {
+        ImGui::BeginDisabled(!m_realScale);
+        sliderFloatExact("Free camera speed",&m_userSpeedKmS,.001f,1000.f,"%.3f km/s","%.3f",ImGuiSliderFlags_Logarithmic);
+        ImGui::EndDisabled();
+        explain("Free-flight speed in 1:1 mode, in kilometers per real second. Shift triples it.");
+        sliderFloatExact("Look sensitivity", &m_sensitivity, 0.0002f, 0.012f, "%.4f rad/px", "%.4f", ImGuiSliderFlags_Logarithmic);
+        explain("Mouse-look rotation per pixel. Applies to free look; lower values give finer aim.");
+        sliderFloatExact("Wheel sensitivity", &m_scrollSensitivity, 0.1f, 5.0f, "%.2fx", "%.2f");
+        explain("Zoom/dolly sensitivity. The wheel affects the scene only while the cursor is outside every panel and popup.");
         ImGui::Separator();
+        ImGui::TextWrapped("WASD: fly | Q/E or C/Space: vertical | Shift: boost | arrows or right drag: look.");
+        m_actions.drawEditor();
+        } else {
+        ImGui::TextWrapped("Experimental entry, dynamics, sensors and control parameters.");
+        ImGui::Checkbox("Force quick repositioning to target",&m_quickReposition);
+        explain("Override the conservative 1:1 slew profile with the fast demonstration controller. These are illustrative limits, not vehicle-specific flight software.");
         ImGui::BeginDisabled(m_replayActive||m_numericalOrbit);
         if (ImGui::Checkbox("Atmospheric entry preview", &m_entryPreview)) {
             m_orbitAltitudeKm=m_entryPreview ? 80 : 650;
@@ -1154,73 +1249,22 @@ void ADCSView::drawSettings() {
         }
         ImGui::Separator();
         ImGui::EndDisabled();
-        const char* names[]={"Low poly","Landsat 8","Hubble Space Telescope","Terra","GOES-R","International Space Station"};
-        if (ImGui::BeginCombo("Satellite model", names[m_selectedModel])) {
-            for(int i=0;i<6;++i) {
-                const bool missing=i==1?m_landsatModel.parts.empty():i>=2?m_additionalModels[i-2].parts.empty():false;
-                ImGui::BeginDisabled(missing);
-                if(ImGui::Selectable(names[i],m_selectedModel==i))selectModel(i);
-                ImGui::EndDisabled();
-            }
-            ImGui::EndCombo();
-        }
-        explain("Choose a locally stored spacecraft. Switching updates geometry and camera framing while preserving the orbit and control simulation.");
-        if (m_selectedModel == 1) ImGui::TextDisabled("Model: NASA / Christopher R. Meaney");
-        if (m_selectedModel >= 2) ImGui::TextDisabled(m_selectedModel==3?"Model: NASA / Christian A. Lopez":"Model: NASA");
-        if (m_landsatModel.parts.empty()) ImGui::TextWrapped("Landsat 8 model could not be loaded.");
-        ImGui::Separator();
-        sliderFloatExact("Look sensitivity", &m_sensitivity, 0.0002f, 0.012f, "%.4f rad/px", "%.4f", ImGuiSliderFlags_Logarithmic);
-        explain("Mouse-look rotation per pixel. Applies to free look; lower values give finer aim.");
-        sliderFloatExact("Wheel sensitivity", &m_scrollSensitivity, 0.1f, 5.0f, "%.2fx", "%.2f");
-        explain("Zoom/dolly sensitivity. The wheel affects the scene only while the cursor is outside every panel and popup.");
-        ImGui::Separator();
-        bool realScale = m_realScale;
-        if (ImGui::Checkbox("1:1 physical scale & real time", &realScale)) setRealScale(realScale);
-        explain("Earth and orbit retain their physical dimensions. The selected spacecraft uses meter-scale geometry. One real second advances one simulation second.");
-        ImGui::Checkbox("Force quick repositioning to target",&m_quickReposition);
-        explain("Override the conservative 1:1 slew profile with the fast demonstration controller. Off: 0.25 degrees/s (Hubble: 0.1), with 0.02 degrees/s squared acceleration. These are illustrative limits, not vehicle-specific flight software.");
-        ImGui::TextWrapped(m_selectedModel == 0
-            ? "Earth radius: 6,378 km. Satellite bus: 0.7 x 0.7 x 1.2 m; wingspan: about 4.2 m."
-            : "Earth radius: 6,378 km. Detailed spacecraft use meter-scale geometry; Terra's source units are calibrated to its 6.8 m bus. Model selection does not change mass, inertia or orbital elements.");
-        ImGui::BeginDisabled(!m_realScale);
-        sliderFloatExact("User speed", &m_userSpeedKmS, 0.001f, 1000.0f, "%.3f km/s", "%.3f", ImGuiSliderFlags_Logarithmic);
-        explain("Free-flight speed in kilometers per real second. Shift triples it. Diagonal movement is normalized.");
-        ImGui::BeginDisabled(m_replayActive||m_numericalOrbit);
-        sliderFloatExact("Satellite speed", &m_satelliteSpeedFactor, 0.0f, 20.0f, "%.2fx circular orbit", "%.2f");
-        explain("One is the circular-orbit speed at this altitude. Zero holds orbital position; other values override orbital motion for experimentation without changing the simulation clock or Earth rotation.");
-        double orbitalSpeed = m_replayActive||m_numericalOrbit?m_currentOrbit.velocity.norm():std::sqrt(398600.44 / (6378.137 + m_orbitAltitudeKm));
-        ImGui::Text("Satellite: %.3f km/s", orbitalSpeed * m_satelliteSpeedFactor);
-        if (ImGui::Button("Reset speeds to orbital speed")) {
-            m_satelliteSpeedFactor = 1;
-            m_userSpeedKmS = float(orbitalSpeed);
-        }
-        ImGui::EndDisabled();
-        if (ImGui::Button("Go beside satellite (20 m)")) {
-            m_camPreset = CameraPreset::FreeFlycam;
-            m_flycamPos = m_satPosECI + m_satPosECI.normalized() * (20 * spacecraftScale());
-            m_flyForward = (m_satPosECI - m_flycamPos).normalized();
-            auto up = std::abs(m_flyForward[1]) < 0.9 ? aero::math::Vec3(0,1,0) : aero::math::Vec3(1,0,0);
-            m_flyUp = m_flyForward.cross(up).normalized().cross(m_flyForward);
-            ImGui::CloseCurrentPopup();
-        }
-        explain("Place the free camera 20 meters above the satellite. It continues moving at the selected speed; set satellite speed to zero to inspect it at rest.");
-        ImGui::EndDisabled();
-        ImGui::TextWrapped("WASD: fly | E/Q: rise/descend | Shift: boost. Move the pointer onto the 3D scene. Use arrow keys or hold right mouse to look.");
         drawExpertSettings();
+        }
         ImGui::PopItemWidth();
-        if (ImGui::Button("Close", ImVec2(-1, 28))) ImGui::CloseCurrentPopup();
-        ImGui::EndPopup();
+        ImGui::EndChild();
     }
+    ImGui::End();
 }
 void ADCSView::drawFlightOverlay() {
-    if (!m_realScale) return;
+    if (!m_realScale || !m_hudVisible) return;
     const auto display = ImGui::GetIO().DisplaySize;
     if (display.x < 100 || display.y < 100) return;
     auto* draw = ImGui::GetBackgroundDrawList();
     const auto delta = m_satPosECI - m_cameraEye;
     const auto right = m_cameraForward.cross(m_cameraUp);
     double x = delta.dot(right), y = delta.dot(m_cameraUp), z = delta.dot(m_cameraForward);
-    const double tanHalf = std::tan(45.0 * 3.141592653589793 / 360.0);
+    const double tanHalf = std::tan(m_cameraFov * 3.141592653589793 / 360.0);
     double nx = x / (std::max(std::abs(z), 1e-9) * tanHalf * display.x/display.y);
     double ny = -y / (std::max(std::abs(z), 1e-9) * tanHalf);
     const bool offscreen = z <= 0 || std::abs(nx) > 0.92 || std::abs(ny) > 0.86;
@@ -1231,7 +1275,8 @@ void ADCSView::drawFlightOverlay() {
     }
     ImVec2 point(float((nx+1)*display.x/2), float((ny+1)*display.y/2));
     const bool occluded = satelliteHiddenByEarth();
-    ImU32 color = occluded ? IM_COL32(255,185,65,255) : IM_COL32(110,225,255,255);
+    const int alpha=int(std::round(255*m_markerOpacity));
+    ImU32 color = occluded ? IM_COL32(255,185,65,alpha) : IM_COL32(110,225,255,alpha);
     draw->AddCircleFilled(point, 4, color);
     draw->AddCircle(point, 8, color, 24, 1.5f);
     char label[128];
@@ -1240,7 +1285,7 @@ void ADCSView::drawFlightOverlay() {
     ImVec2 size = ImGui::CalcTextSize(label);
     ImVec2 textPos(std::clamp(point.x+12, 8.0f, std::max(8.0f, display.x-size.x-8)),
                    std::clamp(point.y-24, 40.0f, display.y-24));
-    draw->AddRectFilled(ImVec2(textPos.x-4,textPos.y-3), ImVec2(textPos.x+size.x+4,textPos.y+size.y+3), IM_COL32(0,0,0,200), 3);
+    draw->AddRectFilled(ImVec2(textPos.x-4,textPos.y-3), ImVec2(textPos.x+size.x+4,textPos.y+size.y+3), IM_COL32(0,0,0,int(200*m_markerOpacity)), 3);
     draw->AddText(textPos, color, label);
     char speed[128];
     snprintf(speed, sizeof(speed), "USER %.3f km/s  |  SET %.3f km/s", m_actualUserSpeedKmS, m_userSpeedKmS);
@@ -1254,16 +1299,16 @@ void ADCSView::drawFlightOverlay() {
 }
 
 void ADCSView::drawUI() {
-    drawTelemetryHUD();
-    drawCharts();
-    drawControlPanel();
-    draw2DWorldMap();
+    if(m_hudVisible) {
+        drawTelemetryHUD();drawCharts();drawControlPanel();draw2DWorldMap();
+    }
     drawOrbitReplay();
     drawSettings();
     drawInternetChoice();
+    drawCatalogDetails();
 
     // Draw Optical Reticle in Sensor Lookdown mode
-    if (!m_multiView && m_camPreset == CameraPreset::TelescopeLookdown) {
+    if (m_hudVisible && !m_multiView && m_camPreset == CameraPreset::TelescopeLookdown) {
         ImGuiIO& io = ImGui::GetIO();
         drawTelescopeReticle((int)io.DisplaySize.x, (int)io.DisplaySize.y);
     }
@@ -1337,6 +1382,9 @@ void ADCSView::drawTelemetryHUD() {
         ImGui::TextColored(ImVec4(0.94f, 0.27f, 0.27f, 1.0f), "LOS Status:     OCCULTED (%.1f° El)", m_elevationDeg);
     explain("Line of sight from the ground target to the spacecraft. Elevation above zero means the satellite is above the local horizon.");
     }
+    ImGui::Text("Camera alt:     %.3f km",cameraAltitudeKm());
+    ImGui::Text("Satellite alt:  %.3f km",satelliteAltitudeKm());
+    explain("Altitude above the spherical Earth surface. Satellite range is a separate measurement.");
     ImGui::Text("Slant Range:    %.1f km", m_slantRangeKm);
     explain("Straight-line distance between the spacecraft and the ground target, in kilometers.");
     ImGui::Text("Solar Regime:   %s", m_isSatSunlit ? "100% [SUNLIT]" : "0% [UMBRA / ECLIPSE]");
@@ -1355,7 +1403,8 @@ void ADCSView::drawTelemetryHUD() {
 }
 
 void ADCSView::drawCharts() {
-    beginEdgePanel("Live Strip-Charts (ImPlot)", 1);
+    const float altimeterReserve=m_showAltimeters?(cameraAltitudeKm()<0?5:4)*ImGui::GetTextLineHeightWithSpacing()+20*ImGui::GetStyle().FontScaleMain+16:0;
+    beginEdgePanel("Live Strip-Charts (ImPlot)", 1,altimeterReserve);
 
     if (ImPlot::BeginPlot("Body Rate |omega| (°/s)", ImVec2(-1, 160))) {
         ImPlot::SetupAxes("Sim Time (s)", "Rate (°/s)", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
@@ -1392,7 +1441,7 @@ void ADCSView::drawControlPanel() {
     if(m_recording.active())ImGui::TextColored(ImVec4(1,.25f,.2f,1),"RECORDING PATH | %zu samples",m_recording.count());
 
     if (ImGui::Button(m_isPaused ? "Resume Sim" : "Pause Sim", ImVec2((ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f, 28))) {
-        m_isPaused = !m_isPaused;
+        m_actions.run("sim.toggle");
     }
     explain("Pause or resume simulation time. Camera movement and rendering continue.");
     ImGui::SameLine();
@@ -1529,14 +1578,20 @@ void ADCSView::drawControlPanel() {
         ImGui::PushID((int)i);
         ImVec2 row = ImGui::GetCursorScreenPos();
         const float rowWidth = ImGui::GetContentRegionAvail().x;
-        if (ImGui::Selectable("##station", isSelected, 0, ImVec2(0, isSelected?132.0f:110.0f))) {
+        // Name and coordinates are real text, outside the decorative photograph.
+        ImGui::TextWrapped("%s", m_stations[i].name.c_str());
+        ImGui::Text("Latitude %.2f, longitude %.2f", m_stations[i].latDeg, m_stations[i].lonDeg);
+        row = ImGui::GetCursorScreenPos();
+        ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(.02f,1));
+        if (ImGui::Selectable(isSelected ? "Selected target###station" : "Select target###station", isSelected, 0, ImVec2(0, isSelected?132.0f:110.0f))) {
             m_selectedStationIdx = (int)i;
             m_targetName = m_stations[i].name;
             m_targetLatDeg = m_stations[i].latDeg;
             m_targetLonDeg = m_stations[i].lonDeg;
             m_pointingSettledSec=0;
         }
-        explain("Select this location as the tracking target. The photograph shows the location; coordinates determine the simulated line of sight.");
+        ImGui::PopStyleVar();
+        explain((std::string("Select ") + m_stations[i].name + " as the tracking target. Photograph is illustrative; coordinates determine the line of sight.").c_str());
         auto* draw = ImGui::GetWindowDrawList();
         if (m_stations[i].texture) {
             float imageAspect = m_stations[i].imageAspect;
@@ -1547,11 +1602,10 @@ void ADCSView::drawControlPanel() {
         }
         else
             draw->AddText(ImVec2(row.x+8,row.y+30), IM_COL32(150,160,180,255), "Location image unavailable");
-        draw->AddText(ImVec2(row.x+4,row.y+87), IM_COL32(235,240,250,255), m_stations[i].name.c_str());
         if(isSelected && m_repositionEtaSec>0) {
             const int eta=int(std::ceil(std::min(m_repositionEtaSec,359999.0)));
             char label[80];snprintf(label,sizeof(label),"Repositioning... ETA: %02d:%02d:%02d",eta/3600,(eta/60)%60,eta%60);
-            draw->AddText(ImVec2(row.x+4,row.y+108),IM_COL32(255,220,40,255),label);
+            draw->AddText(ImVec2(row.x+4,row.y+87),IM_COL32(255,220,40,255),label);
             if(ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))ImGui::SetTooltip("Estimated attitude slew and settling time, recalculated as the target moves. Does not predict when Earth stops blocking the target. Pausing freezes progress.");
         }
         ImGui::PopID();
@@ -1602,6 +1656,9 @@ void ADCSView::draw2DWorldMap() {
     }
 
     ImGui::Dummy(mapSize);
+    ImGui::TextWrapped("Ground track: satellite path and selected target %s. Target is %s.", m_targetName.c_str(), m_isTargetVisible ? "above the horizon" : "blocked by Earth");
+    if (!m_groundTrack2D.empty()) ImGui::TextWrapped("Satellite latitude %.2f, longitude %.2f degrees.", m_groundTrack2D.back().lat, m_groundTrack2D.back().lon);
+    ImGui::TextWrapped("Target latitude %.2f, longitude %.2f degrees.", m_targetLatDeg, m_targetLonDeg);
     explain("Earth-fixed ground track: cyan is the satellite and its recent path; red is the selected target. The connecting line indicates visibility. Longitude runs left to right, latitude top to bottom.");
     ImGui::End();
 }
