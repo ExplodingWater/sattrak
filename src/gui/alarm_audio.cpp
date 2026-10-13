@@ -11,9 +11,12 @@ struct AlarmAudio::Impl {
     std::atomic<float> gain{1};
     static void render(ma_device* device,void* output,const void*,ma_uint32 count) {
         auto& self=*static_cast<Impl*>(device->pUserData);auto* pcm=static_cast<float*>(output);
+        constexpr double twopi = 6.283185307179586;
+        constexpr double square_hz = 248.0;
         for(ma_uint32 i=0;i<count;++i){const double t=double(self.frame++%device->sampleRate)/device->sampleRate,phase=std::fmod(t,.25);
             const double envelope=t<.5?std::min({1.0,phase/.01,(.25-phase)/.02}):0;
-            pcm[i]=self.gain.load(std::memory_order_relaxed)*float(.14*envelope*std::sin(6.283185307179586*t*(t<.25?880:1175)));
+            const double waveform = std::sin(twopi * square_hz * t) >= 0.0 ? 1.0 : -1.0;
+            pcm[i]=self.gain.load(std::memory_order_relaxed)*float(.14*envelope*waveform);
         }
     }
     ~Impl(){if(ready)ma_device_uninit(&device);}

@@ -121,7 +121,7 @@ bool MusicPlayer::init(const std::filesystem::path& folder) {
     if(std::filesystem::exists(folder,ec)) {
         for(const auto& item:std::filesystem::directory_iterator(folder,ec))
             if(item.is_regular_file()&&supported(item.path()))m_impl->tracks.push_back(item.path());
-        std::sort(m_impl->tracks.begin(),m_impl->tracks.end());
+        std::shuffle(m_impl->tracks.begin(),m_impl->tracks.end(),m_impl->random);
     }
     std::mt19937 random(std::random_device{}());
     m_impl->startAt=std::uniform_real_distribution<double>(45.0,60.0)(random);
