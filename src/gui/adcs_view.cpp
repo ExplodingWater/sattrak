@@ -1,4 +1,5 @@
 #include "gui/adcs_view.hpp"
+#include "gui/panel_sidebar.hpp"
 #include "gui/slew_profile.hpp"
 #include "gui/numeric_widgets.hpp"
 #include "gui/accessibility.hpp"
@@ -36,7 +37,7 @@ static void savePanelLayout() {
     std::ofstream file("panel_layout.txt");
     for (bool value : detachedPanels()) file << value << ' ';
 }
-static void beginEdgePanel(const char* name, int index, float bottomReserve=0) {
+static void beginEdgePanel(const char* name, int index, float bottomReserve=0, bool* open=nullptr) {
     auto& detached = detachedPanels()[index];
     ImGuiWindow* existing = ImGui::FindWindowByName(name);
     if (!detached && existing && GImGui->MovingWindow == existing &&
@@ -46,18 +47,18 @@ static void beginEdgePanel(const char* name, int index, float bottomReserve=0) {
     }
     const ImVec2 display = ImGui::GetIO().DisplaySize;
     const float scale=ImGui::GetStyle().FontScaleMain;
-    const float top=std::max(45.0f,ImGui::GetFrameHeight()+20);
+    const float top=topInset()+10+(panelPlacement==1||panelPlacement==3?64*ImGui::GetStyle().FontScaleMain:0);
     const float width = std::max(120.0f, std::min(360.0f*scale, (display.x - 30.0f) * 0.45f));
     const float available = std::max(100.0f, display.y - top - 10);
     const bool right = index >= 2;
     const bool lower = index == 1 || index == 3;
     const float upper = available * (right ? 0.68f : 0.44f);
     if (!detached) {
-        ImGui::SetNextWindowPos(ImVec2(right ? display.x - width - 10 : 10,
+        ImGui::SetNextWindowPos(ImVec2(right ? display.x - width - 10 - (panelPlacement==4?64*scale:0) : panelSidebarWidth()+10,
                                       lower ? top + upper + 10 : top), ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2(width, lower ? std::max(60.f,available - upper - 10 - bottomReserve) : upper), ImGuiCond_Always);
     }
-    ImGui::Begin(name, nullptr, detached ? ImGuiWindowFlags_None : ImGuiWindowFlags_NoResize);
+    ImGui::Begin(name, open, detached ? ImGuiWindowFlags_None : ImGuiWindowFlags_NoResize);
 }
 static void explain(const char* text) {
     if (ImGui::IsItemFocused() || ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal | ImGuiHoveredFlags_NoSharedDelay)) {
@@ -556,7 +557,7 @@ void ADCSView::advancePhysics(double dt) {
     aero::math::Vec3 tauCmd = m_controller.computeControlTorque(m_satState.q, m_satState.omega, qTarget);
     const double slewRateDeg=m_customSlew?m_maxSlew:(m_selectedModel==2?0.1:0.25);
     const double slewAccelerationDeg=m_customSlew?m_slewAcceleration:0.02;
-    constexpr double rad=3.141592653589793/180;6
+    constexpr double rad=3.141592653589793/180;
     if(m_realScale && !m_quickReposition) {
         auto acceleration=slewAcceleration(m_satState.q,m_satState.omega,qTarget,slewRateDeg*rad,slewAccelerationDeg*rad);
         const auto& inertia=m_dynamics.parameters().inertia;
@@ -1298,9 +1299,20 @@ void ADCSView::drawFlightOverlay() {
     draw->AddText(font, 20, speedPos, IM_COL32(255,55,55,255), speed);
 }
 
-void ADCSView::drawUI() {
+void ADCSView::drawUI(bool allPanels) {
+    beginPanelSidebar("Orbital panels",6);
+    panelToggle("Telemetry",PanelIcon::Telemetry,m_panelVisible[0]);
+    panelToggle("Live charts",PanelIcon::Charts,m_panelVisible[1]);
+    panelToggle("Flight director and camera",PanelIcon::Controls,m_panelVisible[2]);
+    panelToggle("World map",PanelIcon::Map,m_panelVisible[3]);
+    panelToggle("Orbit replay",PanelIcon::Replay,m_replayWindow);
+    panelToggle("Settings",PanelIcon::Settings,m_settingsVisible);
+    ImGui::End();
     if(m_hudVisible) {
-        drawTelemetryHUD();drawCharts();drawControlPanel();draw2DWorldMap();
+        if(allPanels||m_panelVisible[0]) drawTelemetryHUD();
+        if(allPanels||m_panelVisible[1]) drawCharts();
+        if(allPanels||m_panelVisible[2]) drawControlPanel();
+        if(allPanels||m_panelVisible[3]) draw2DWorldMap();
     }
     drawOrbitReplay();
     drawSettings();
@@ -1337,7 +1349,7 @@ void ADCSView::drawTelescopeReticle(int width, int height) {
 }
 
 void ADCSView::drawTelemetryHUD() {
-    beginEdgePanel("GNC & Orbital Telemetry", 0);
+    beginEdgePanel("GNC & Orbital Telemetry", 0, 0, &m_panelVisible[0]);
     if (m_heatFlux > 100000) {
         float pulse=0.35f+0.65f*float(0.5+0.5*std::sin(ImGui::GetTime()*9));
         ImGui::TextColored(ImVec4(1,pulse*0.35f,0.05f,1), "REENTRY HEATING!");
@@ -1404,7 +1416,7 @@ void ADCSView::drawTelemetryHUD() {
 
 void ADCSView::drawCharts() {
     const float altimeterReserve=m_showAltimeters?(cameraAltitudeKm()<0?5:4)*ImGui::GetTextLineHeightWithSpacing()+20*ImGui::GetStyle().FontScaleMain+16:0;
-    beginEdgePanel("Live Strip-Charts (ImPlot)", 1,altimeterReserve);
+    beginEdgePanel("Live Strip-Charts (ImPlot)", 1,altimeterReserve, &m_panelVisible[1]);
 
     if (ImPlot::BeginPlot("Body Rate |omega| (°/s)", ImVec2(-1, 160))) {
         ImPlot::SetupAxes("Sim Time (s)", "Rate (°/s)", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
@@ -1434,7 +1446,7 @@ void ADCSView::drawCharts() {
 }
 
 void ADCSView::drawControlPanel() {
-    beginEdgePanel("Flight Director & Camera", 2);
+    beginEdgePanel("Flight Director & Camera", 2, 0, &m_panelVisible[2]);
     ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.55f);
     if (ImGui::Button("Settings", ImVec2(-1, 28))) m_openSettings = true;
     if (ImGui::Button("Recorded orbit replay / import",ImVec2(-1,28)))m_replayWindow=true;
@@ -1616,7 +1628,7 @@ void ADCSView::drawControlPanel() {
 }
 
 void ADCSView::draw2DWorldMap() {
-    beginEdgePanel("2D Ground Track (ECEF)", 3);
+    beginEdgePanel("2D Ground Track (ECEF)", 3, 0, &m_panelVisible[3]);
 
     ImDrawList* drawList = ImGui::GetWindowDrawList();
     ImVec2 p0 = ImGui::GetCursorScreenPos();

@@ -1,3 +1,4 @@
+#include "gui/panel_sidebar.hpp"
 #include "gui/cfd_view.hpp"
 #include "gui/numeric_widgets.hpp"
 #include "cfd/oblique_shock.hpp"
@@ -161,16 +162,21 @@ void CFDView::updateFlowTexture() {
 }
 
 void CFDView::drawUI() {
-    drawFlowfieldViewport();
-    drawControlPanel();
-    drawBenchmarkTable();
+    beginPanelSidebar("CFD panels",3);
+    panelToggle("Flowfield",PanelIcon::Flow,m_flowVisible);
+    panelToggle("Solver controls",PanelIcon::Controls,m_controlsVisible);
+    panelToggle("Verification benchmark",PanelIcon::Table,m_benchmarkVisible);
+    ImGui::End();
+    if(m_flowVisible) drawFlowfieldViewport();
+    if(m_controlsVisible) drawControlPanel();
+    if(m_benchmarkVisible) drawBenchmarkTable();
 }
 
 void CFDView::drawFlowfieldViewport() {
-    ImGui::SetNextWindowPos(ImVec2(10, 35), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImVec2(panelSidebarWidth()+10, std::max(45.f,ImGui::GetFrameHeight()+20)), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(980, 520), ImGuiCond_FirstUseEver);
 
-    ImGui::Begin("2D Compressible Supersonic Flowfield", nullptr, ImGuiWindowFlags_None);
+    ImGui::Begin("2D Compressible Supersonic Flowfield", &m_flowVisible, ImGuiWindowFlags_None);
 
     ImGui::Text("Active Contour: %s | Mach Inflow: M=%.2f | Wedge: θ=%.1f°",
         m_contourType == CFDContourType::MachNumber ? "Local Mach Number M(x,y)" :
@@ -189,7 +195,7 @@ void CFDView::drawControlPanel() {
     ImGui::SetNextWindowPos(ImVec2(1005, 35), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(340, 520), ImGuiCond_FirstUseEver);
 
-    ImGui::Begin("Supersonic CFD Controls", nullptr, ImGuiWindowFlags_None);
+    ImGui::Begin("Supersonic CFD Controls", &m_controlsVisible, ImGuiWindowFlags_None);
     if (!m_solverError.empty()) ImGui::TextWrapped("Solver stopped: %s", m_solverError.c_str());
     if (m_solver) ImGui::Text("Scaled residual: %.3e", m_solver->residualNorm());
 
@@ -239,10 +245,10 @@ void CFDView::drawControlPanel() {
 }
 
 void CFDView::drawBenchmarkTable() {
-    ImGui::SetNextWindowPos(ImVec2(10, 565), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImVec2(panelSidebarWidth()+10, 565), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(1335, 230), ImGuiCond_FirstUseEver);
 
-    ImGui::Begin("Analytical Rankine-Hugoniot Verification Benchmark", nullptr, ImGuiWindowFlags_None);
+    ImGui::Begin("Analytical Rankine-Hugoniot Verification Benchmark", &m_benchmarkVisible, ImGuiWindowFlags_None);
     if (!m_hasSample) {
         ImGui::TextUnformatted("Awaiting a numerical sample.");
         ImGui::End();

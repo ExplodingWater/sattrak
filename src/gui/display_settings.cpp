@@ -1,4 +1,6 @@
+#include "gui/interface_layout.hpp"
 #include "gui/display_settings.hpp"
+#include "gui/color_theme.hpp"
 #include "imgui.h"
 #include <algorithm>
 #include <cmath>
@@ -10,6 +12,17 @@
 namespace gui {
 DisplaySettings::DisplaySettings(GLFWwindow* window,bool remember):window(window),remember(remember) {
     baseStyle=ImGui::GetStyle();
+    if(remember){std::ifstream f("local/interface_layout.txt");int placement,hover;
+        if(f>>placement>>hover && placement>=0 && placement<5 && (hover==0||hover==1)){
+            panelPlacement=placement;topBarHover=hover!=0;
+        }
+    }
+    if(remember) {
+        std::ifstream themeFile("local/color_theme.txt");int selected,contrast;
+        if(themeFile>>selected>>contrast && selected>=0 && selected<theme::count && (contrast==0||contrast==1)) {
+            colorTheme=selected;highContrast=contrast!=0;
+        }
+    }
     if(remember){std::ifstream scale("local/ui_scale.txt");int value;if(scale>>value)uiScale=std::clamp(value,75,200);}
     refreshMonitors();syncWindow();
     int best=0;
@@ -108,12 +121,16 @@ bool DisplaySettings::apply(const State& state) {
     return true;
 }
 void DisplaySettings::update() {
-    if(uiScale!=appliedScale) {
+    if(uiScale!=appliedScale || colorTheme!=appliedTheme || highContrast!=appliedHighContrast) {
         uiScale=std::clamp(uiScale,75,200);appliedScale=uiScale;
+        colorTheme=std::clamp(colorTheme,0,theme::count-1);
+        appliedTheme=colorTheme;appliedHighContrast=highContrast;
         ImGui::GetStyle()=baseStyle;
+        theme::apply(ImGui::GetStyle(),baseStyle,colorTheme,highContrast);
         ImGui::GetStyle().ScaleAllSizes(uiScale/100.0f);
         ImGui::GetStyle().FontScaleMain=uiScale/100.0f;
         if(remember){std::error_code ec;std::filesystem::create_directories("local",ec);std::ofstream("local/ui_scale.txt")<<uiScale;}
+        if(remember)std::ofstream("local/color_theme.txt")<<colorTheme<<' '<<int(highContrast)<<'\n';
     }
     refreshMonitors();
     if(monitors.empty())return;
@@ -147,6 +164,16 @@ bool DisplaySettings::save() const {
 }
 void DisplaySettings::draw() {
     ImGui::SeparatorText("Interface");
+    bool layoutChanged=ImGui::Combo("Panel button position",&panelPlacement,"centerbottom\0toplefth\0topleftv\0toprighth\0toprightv\0");
+    layoutChanged|=ImGui::Checkbox("Show top bar when hovering over its handle",&topBarHover);
+    if(layoutChanged && remember){
+        std::error_code ec;std::filesystem::create_directories("local",ec);
+        std::ofstream f("local/interface_layout.txt");
+        if(!(f<<panelPlacement<<' '<<topBarHover))message="Interface changed, but preferences could not be saved.";
+    }
+    ImGui::Combo("Color theme",&colorTheme,theme::names,theme::count);
+    ImGui::Checkbox("High contrast",&highContrast);
+    ImGui::TextWrapped("Theme changes apply immediately and are remembered. High contrast uses opaque dark surfaces, brighter text and clear control outlines.");
     ImGui::SliderInt("UI scale",&uiScale,75,200,"%d%%",ImGuiSliderFlags_AlwaysClamp);
     ImGui::SetNextItemWidth(90*ImGui::GetStyle().FontScaleMain);
     if(ImGui::InputInt("Scale percent",&uiScale,0,0))uiScale=std::clamp(uiScale,75,200);

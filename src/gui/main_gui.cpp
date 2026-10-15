@@ -22,6 +22,7 @@
 #include "gui/music_player.hpp"
 #include "gui/developer_console.hpp"
 #include "gui/music_icons.hpp"
+#include "gui/panel_sidebar.hpp"
 #include "gui/accessibility_panel.hpp"
 #include "../../tests/accessibility_checks.hpp"
 #include "../../tests/gui_view_checks.hpp"
@@ -95,7 +96,8 @@ int main(int argc, char** argv) {
     const bool consoleSmoke = argc > 1 && std::strcmp(argv[1], "--console-smoke-test") == 0;
     const bool displaySmoke = argc > 1 && std::strcmp(argv[1], "--display-smoke-test") == 0;
     const bool catalogSmoke = argc > 1 && std::strcmp(argv[1], "--catalog-smoke-test") == 0;
-    const bool smokeTest = accessibilitySmoke || catalogSmoke || displaySmoke || consoleSmoke || startupSmoke || orbitSmoke || multiSmoke || modelSmoke || (argc > 1 && std::strcmp(argv[1], "--smoke-test") == 0);
+    const bool interfaceSmoke = argc > 1 && std::strcmp(argv[1], "--interface-smoke-test") == 0;
+    const bool smokeTest = interfaceSmoke || accessibilitySmoke || catalogSmoke || displaySmoke || consoleSmoke || startupSmoke || orbitSmoke || multiSmoke || modelSmoke || (argc > 1 && std::strcmp(argv[1], "--smoke-test") == 0);
     if (!std::filesystem::exists("earth_texture.jpg")) {
         auto executableDir = std::filesystem::absolute(argv[0]).parent_path();
         if (std::filesystem::exists(executableDir / "earth_texture.jpg"))
@@ -155,7 +157,6 @@ int main(int argc, char** argv) {
     io.ConfigWindowsResizeFromEdges = true;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     applyStealthAerospaceTheme();
-    gui::accessibility::applyContrastPalette();
     io.Fonts->AddFontDefault();
     if (std::filesystem::exists("C:/Windows/Fonts/arial.ttf"))
         io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/arial.ttf", 20.0f);
@@ -291,27 +292,64 @@ int main(int argc, char** argv) {
         accessibilityPanel.keyboard(console.isOpen());
         adcsView.actions().process(activeStudioTab!=0||console.isOpen());
 
+        if(interfaceSmoke){gui::panelPlacement=smokeFrame/4;gui::topBarVisible=(smokeFrame%4)>=2;}
         // Top Command Bar (Tab Selector)
         const float uiScale=ImGui::GetStyle().FontScaleMain;
         const float logicalWidth=io.DisplaySize.x/uiScale;
+        // The attached handle stays available when the top bar is collapsed.
+        ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x*.5f,gui::topInset()),ImGuiCond_Always,ImVec2(.5f,0));
+        ImGui::SetNextWindowSize(ImVec2(72*uiScale,24*uiScale));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2(0,0));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize,0);
+        ImGui::Begin("Top bar handle",nullptr,ImGuiWindowFlags_NoTitleBar|ImGuiWindowFlags_NoResize|
+            ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoScrollbar|ImGuiWindowFlags_NoBackground|ImGuiWindowFlags_NoSavedSettings);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding,1*uiScale);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize,0);
+        ImGui::PushStyleColor(ImGuiCol_Button,ImVec4(.20f,.20f,.20f,.72f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,ImVec4(.28f,.28f,.28f,.85f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,ImVec4(.34f,.34f,.34f,.92f));
+        const bool clicked=ImGui::Button("##top_bar_toggle",ImVec2(72*uiScale,24*uiScale));
+        ImGui::PopStyleColor(3);
+        ImGui::PopStyleVar(2);
+        const bool hovered=ImGui::IsItemHovered(ImGuiHoveredFlags_NoNavOverride);
+        const auto handle=ImGui::GetItemRectMin();
+        const float cx=handle.x+36*uiScale,cy=handle.y+12*uiScale;
+        const float direction=gui::topBarVisible?-1.f:1.f;
+        auto* handleDraw=ImGui::GetWindowDrawList();
+        handleDraw->AddLine(ImVec2(cx-22*uiScale,cy-direction*3*uiScale),ImVec2(cx,cy+direction*4*uiScale),IM_COL32(235,235,235,255),2*uiScale);
+        handleDraw->AddLine(ImVec2(cx,cy+direction*4*uiScale),ImVec2(cx+22*uiScale,cy-direction*3*uiScale),IM_COL32(235,235,235,255),2*uiScale);
+        if(hovered)ImGui::SetTooltip(gui::topBarVisible?"Hide top bar":"Show top bar");
+        if(clicked)gui::topBarVisible=!gui::topBarVisible;
+        else if(hovered&&gui::topBarHover)gui::topBarVisible=true;
+        ImGui::End();ImGui::PopStyleVar(2);
+        if(gui::topBarVisible) {
         ImGui::SetNextWindowPos(ImVec2(0, 0));
-        ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, std::max(36.0f,ImGui::GetFrameHeight()+8)));
+        ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, gui::topBarHeight()));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,ImVec2(6*uiScale,12*uiScale));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding,1*uiScale);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,0);
         ImGui::Begin("TopBar", nullptr,
             ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_MenuBar);
 
         if (ImGui::BeginMenuBar()) {
+            // Measure each responsive layout and center the complete row, including FPS.
+            static float rowWidths[2]={0,0};
+            float& rowWidth=rowWidths[logicalWidth<1700?0:1];
+            ImGui::SetCursorPosX(std::max(ImGui::GetStyle().WindowPadding.x,
+                (ImGui::GetWindowWidth()-rowWidth*uiScale)*.5f));
+            const float rowStart=ImGui::GetCursorPosX();
             if(ImGui::MenuItem("Help", "F10")) accessibilityPanel.open();
-            if(logicalWidth>=600){ImGui::TextColored(ImVec4(0.22f, 0.74f, 0.97f, 1.0f), "Simulation");ImGui::TextDisabled("|");}
-
-            if (ImGui::MenuItem(logicalWidth < 1700 ? " [1] ORBITAL GNC " : " [1] 3D ORBITAL GNC & SATELLITE TRACKING ", nullptr, activeStudioTab == 0)) {
-                activeStudioTab = 0;
+            if(ImGui::BeginMenu("Simulation")) {
+                if(ImGui::MenuItem("Orbital tracking",nullptr,activeStudioTab==0))activeStudioTab=0;
+                if(ImGui::BeginMenu("Tools")) {
+                    if(ImGui::MenuItem("Supersonic shock explorer",nullptr,activeStudioTab==1))activeStudioTab=1;
+                    ImGui::EndMenu();
+                }
+                ImGui::EndMenu();
             }
-            if (ImGui::MenuItem(logicalWidth < 1700 ? " [2] CFD " : " [2] SUPERSONIC CFD SHOCK EXPLORER ", nullptr, activeStudioTab == 1)) {
-                activeStudioTab = 1;
-            }
 
-            ImGui::TextDisabled("|");
+            ImGui::Spacing();
             if(logicalWidth<1700) {
                 if(ImGui::BeginMenu("Music")) {
                     ImGui::BeginDisabled(!musicPlayer.hasTracks());
@@ -319,8 +357,8 @@ int main(int argc, char** argv) {
                     if(gui::musicIconButton("##compact_pause",musicPlayer.isPlaying()?gui::MusicIcon::Pause:gui::MusicIcon::Play))adcsView.actions().run("music.toggle");ImGui::SameLine();
                     if(gui::musicIconButton("##compact_next",gui::MusicIcon::Next))adcsView.actions().run("music.next");
                     float elapsed=float(musicPlayer.elapsedSeconds()),duration=float(musicPlayer.durationSeconds());
-                    ImGui::Text("%d:%02d / -%d:%02d",int(elapsed)/60,int(elapsed)%60,int(std::max(0.0f,duration-elapsed))/60,int(std::max(0.0f,duration-elapsed))%60);
-                    ImGui::SetNextItemWidth(180*uiScale);if(ImGui::SliderFloat("Seek",&elapsed,0,std::max(1.0f,duration),""))musicPlayer.seekSeconds(elapsed);
+                    ImGui::Text("%d:%02d, -%d:%02d",int(elapsed)/60,int(elapsed)%60,int(std::max(0.0f,duration-elapsed))/60,int(std::max(0.0f,duration-elapsed))%60);
+                    ImGui::SetNextItemWidth(280*uiScale);if(gui::mediaSeek("##compact_seek",&elapsed,duration))musicPlayer.seekSeconds(elapsed);
                     ImGui::EndDisabled();int volume=musicPlayer.volumePercent();ImGui::SetNextItemWidth(160*uiScale);
                     if(ImGui::SliderInt("Volume",&volume,0,200,"%d%%"))musicPlayer.setVolumePercent(volume);
                     ImGui::SetNextItemWidth(80*uiScale);if(ImGui::InputInt("Exact percent",&volume,0,0))musicPlayer.setVolumePercent(volume);
@@ -346,9 +384,9 @@ int main(int argc, char** argv) {
             const int seconds=int(elapsed);
             ImGui::Text("%d:%02d",seconds/60,seconds%60);
             ImGui::SameLine();
-            ImGui::SetNextItemWidth((logicalWidth<1200?90:160)*uiScale);
+            ImGui::SetNextItemWidth(240*uiScale);
             ImGui::BeginDisabled(duration<=0);
-            if(ImGui::SliderFloat("##music_seek",&elapsed,0,float(duration),"",ImGuiSliderFlags_AlwaysClamp))musicPlayer.seekSeconds(elapsed);
+            if(gui::mediaSeek("##music_seek",&elapsed,float(duration)))musicPlayer.seekSeconds(elapsed);
             ImGui::EndDisabled();
             ImGui::SameLine();
             const int remaining=int(std::ceil(std::max(0.0,duration-elapsed)));
@@ -358,7 +396,7 @@ int main(int argc, char** argv) {
                 ImGui::TextDisabled("%.22s", musicPlayer.displayText().c_str());
                 ImGui::SameLine();
             }
-            ImGui::TextUnformatted("VOL");
+            ImGui::TextUnformatted("Volume");
             ImGui::SameLine();
             int musicVolume=musicPlayer.volumePercent();
             ImGui::SetNextItemWidth((logicalWidth < 1050 ? 52.0f : 72.0f)*uiScale);
@@ -372,31 +410,19 @@ int main(int argc, char** argv) {
                 ImGui::SetTooltip("Exact music volume percentage. Enter any whole number from 0 to 200; values above 100 amplify and may clip.");
             }
 
-            if(ImGui::BeginMenu("Radio")) {
-                bool muted=musicPlayer.radioMuted();
-                if(ImGui::MenuItem("Mute radio communications",nullptr,&muted))musicPlayer.setRadioMuted(muted);
-                bool enabled=musicPlayer.radioEnabled();
-                if(ImGui::MenuItem("Occasional radio",nullptr,&enabled))musicPlayer.setRadioEnabled(enabled);
-                ImGui::TextDisabled("Radio volume: %d%% | fade-in: 5 seconds",musicPlayer.radioVolumePercent());
-                ImGui::TextDisabled("15-30 minutes between recordings");
-                if(enabled&&!musicPlayer.radioPlaying())ImGui::Text("Next in %.0f min",musicPlayer.secondsUntilRadio()/60);
-                ImGui::TextWrapped("%s",musicPlayer.radioStatus().c_str());
-                ImGui::BeginDisabled(!enabled);
-                if(ImGui::MenuItem("Play next recording now"))musicPlayer.playRadioNow();
-                ImGui::EndDisabled();
-                if(ImGui::MenuItem("Stop recording",nullptr,false,musicPlayer.radioPlaying()))musicPlayer.stopRadio();
-                ImGui::EndMenu();
-            }
-            const float fpsX=ImGui::GetWindowWidth()-160*uiScale;
-            if(ImGui::GetCursorPosX()<fpsX) {
-                ImGui::SameLine(fpsX);
-                ImGui::TextDisabled("%.1f FPS | %.2f ms", io.Framerate, 1000.0f / io.Framerate);
+            {
+                ImGui::SameLine();
+                ImGui::TextDisabled("%.1f FPS, %.2f ms", io.Framerate, 1000.0f / io.Framerate);
                 if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal | ImGuiHoveredFlags_NoSharedDelay))
                     ImGui::SetTooltip("Measured rendered frames per second and average frame time, including V-Sync waits.");
             }
+            rowWidth=(ImGui::GetItemRectMax().x-ImGui::GetWindowPos().x-rowStart)/uiScale;
             ImGui::EndMenuBar();
         }
         ImGui::End();
+
+        ImGui::PopStyleVar(3);
+        } // Expanded top bar
 
         // Execute Active Simulation Studio
         if (activeStudioTab == 0) {
@@ -415,7 +441,7 @@ int main(int argc, char** argv) {
             if (smokeTest && smokeFrame >= 8) {
                 ImGui::SetScrollY(ImGui::FindWindowByName("Flight Director & Camera"), 650);
             }
-            adcsView.drawUI();
+            adcsView.drawUI(smokeTest);
             if (smokeTest && !accessibilitySmoke && !catalogSmoke && !displaySmoke && !consoleSmoke && !startupSmoke && !orbitSmoke && !modelSmoke && !multiSmoke) smokeFailed |= !gui::ADCSViewChecks::checkRouting(adcsView, smokeFrame);
             adcsView.renderViews(window,dt);
             adcsView.drawAltimeters();
@@ -440,11 +466,24 @@ int main(int argc, char** argv) {
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
+        if(interfaceSmoke) {
+            auto* strip=ImGui::FindWindowByName("Orbital panels");
+            if(!strip || !(strip->Flags & ImGuiWindowFlags_NoBackground))smokeFailed=true;
+            else {
+                const bool horizontal=gui::horizontalPanels();
+                const float expectedX=gui::panelPlacement==0?(io.DisplaySize.x-strip->Size.x)*.5f:
+                    gui::panelPlacement>=3?io.DisplaySize.x-strip->Size.x:0;
+                const float expectedY=gui::panelPlacement==0?io.DisplaySize.y-strip->Size.y:gui::topInset();
+                if(std::abs(strip->Pos.x-expectedX)>1 || std::abs(strip->Pos.y-expectedY)>1 ||
+                    (horizontal?strip->Size.x<=strip->Size.y:strip->Size.y<=strip->Size.x))smokeFailed=true;
+            }
+        }
         if (smokeTest) {
             const char* panels[] = {"GNC & Orbital Telemetry", "Live Strip-Charts (ImPlot)", "Flight Director & Camera", "2D Ground Track (ECEF)"};
             for (int i = 0; activeStudioTab == 0 && i < 4; ++i) {
                 ImGuiWindow* panel = ImGui::FindWindowByName(panels[i]);
-                float edge = i < 2 ? panel->Pos.x : io.DisplaySize.x - panel->Pos.x - panel->Size.x;
+                if (!panel) { smokeFailed=true; continue; }
+                float edge = i < 2 ? panel->Pos.x - gui::panelSidebarWidth() : io.DisplaySize.x - panel->Pos.x - panel->Size.x - (gui::panelPlacement==4?64*uiScale:0);
                 if (std::abs(edge - 10.0f) > 1.0f || panel->Pos.y + panel->Size.y > io.DisplaySize.y + 1) {
                     std::cerr << "Panel bounds failed: " << panels[i] << "\n";
                     smokeFailed = true;

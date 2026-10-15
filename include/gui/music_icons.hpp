@@ -11,10 +11,10 @@ inline bool musicIconButton(const char* id, MusicIcon icon) {
     const char* name = icon==MusicIcon::Previous ? "Previous" : icon==MusicIcon::Next ? "Next" : icon==MusicIcon::Play ? "Play" : "Pause";
     ImGui::PushID(id);
     // Keep a visible word alongside the glyph. A hidden ## ID is not alt text.
-    const std::string label = std::string("    ") + name;
-    const bool clicked=ImGui::Button(label.c_str(),ImVec2(0,24*scale));
+    const std::string label = std::string("      ") + name;
+    const bool clicked=ImGui::Button(label.c_str(),ImVec2(0,36*scale));
     const auto min=ImGui::GetItemRectMin();
-    auto p=[&](float x,float y){return ImVec2(min.x+(5+x*.75f)*scale,min.y+(2+y*.75f)*scale);};
+    auto p=[&](float x,float y){return ImVec2(min.x+(5+x)*scale,min.y+(6+y)*scale);};
     auto* draw=ImGui::GetWindowDrawList();
     const auto color=ImGui::GetColorU32(ImGuiCol_Text);
     auto line=[&](float x,float y,float a,float b){draw->AddLine(p(x,y),p(a,b),color,1.5f);};
@@ -28,7 +28,7 @@ inline bool musicIconButton(const char* id, MusicIcon icon) {
     } else {
         draw->AddTriangle(p(5,4),p(15,12),p(5,20),color,1.5f);line(19,5,19,19);
     }
-    accessibility::itemDescription(icon==MusicIcon::Previous ? "Previous music track" :
+    if(ImGui::IsItemHovered(ImGuiHoveredFlags_NoNavOverride)||(ImGui::IsItemFocused()&&ImGui::GetIO().NavVisible)) ImGui::SetTooltip("%s",icon==MusicIcon::Previous ? "Previous music track" :
         icon==MusicIcon::Next ? "Next music track" : icon==MusicIcon::Play ? "Play music" : "Pause music");
     ImGui::PopID();
     return clicked;

@@ -92,7 +92,7 @@ public:
     void render3D(int width, int height);
     void renderViews(GLFWwindow* mainWindow,float dt);
     void closeDesktopViews();
-    void drawUI();
+    void drawUI(bool allPanels=false);
     void attachDisplay(DisplaySettings& display) { m_display=&display; }
     void attachAudio(MusicPlayer& player) { m_audio=&player; m_alarmAudio.setGain(player.masterVolumePercent()/100.0f); }
     void drawFlightOverlay();
@@ -117,6 +117,7 @@ private:
     ActionBindings m_actions;
     void registerActions();
     void saveHudPreferences();
+    bool m_panelVisible[4] = {false,false,false,false};
     bool m_rememberPreferences=false,m_hudVisible=true,m_showAltimeters=true;
     float m_markerOpacity=1,m_lastMarkerOpacity=1;
     int m_settingsCategory=0;

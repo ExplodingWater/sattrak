@@ -34,10 +34,15 @@ access; it is not a claim of WCAG conformance or complete screen-reader support.
 
 ## Contrast
 
-The default theme uses opaque panel/control surfaces, brighter secondary text,
-visible control borders and a yellow keyboard-focus outline. Automated checks
-cover normal/secondary text against key default surfaces (4.5:1) and control/focus
-indicators against their surfaces (3:1). These checks do not cover every custom
+Settings → Video → Interface offers Original (blue), Green, Purple, Yellow, Black
+and Red, each with a High contrast checkbox. Original with High contrast off
+restores the previous palette. Selection is saved in `local/color_theme.txt`.
+High contrast is enabled by default and uses opaque panel/control surfaces,
+brighter secondary text and visible control/focus outlines in the theme color.
+Automated checks cover normal/secondary text against key high-contrast surfaces
+(7:1) and control/focus indicators (3:1) in all six themes, including after UI
+scaling changes. Standard variants preserve the softer palette and transparency;
+they do not carry the high-contrast guarantees. These checks do not cover every custom
 plot, image, rendered scene, transparency override or disabled state.
 
 Design references: [W3C contrast guidance](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum),

@@ -54,6 +54,11 @@ display mode. Fullscreen Windowed uses the desktop resolution. Windowed sizes fi
 inside the desktop work area. Apply, then keep the change within 15 seconds, or
 it reverts automatically. Confirmed settings are remembered locally.
 
+**Settings → Video → Interface** offers Original (blue), Green, Purple, Yellow,
+Black and Red themes, each with a **High contrast** option. Changes apply immediately
+and are saved locally. Turn off High contrast with Original selected to restore
+the previous blue palette. High contrast is enabled by default.
+
 ## Keyboard access, text alternatives and terms
 
 Press **F10** or choose **Help** to open keyboard instructions and a selectable text

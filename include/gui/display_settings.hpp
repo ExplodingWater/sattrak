@@ -26,6 +26,8 @@ private:
     std::string message;
     ImGuiStyle baseStyle;
     int uiScale=100,appliedScale=100;
+    int colorTheme=0,appliedTheme=-1;
+    bool highContrast=true,appliedHighContrast=false;
     bool confirmationOpened=false;
     void refreshMonitors();
     bool valid(std::string& reason) const;

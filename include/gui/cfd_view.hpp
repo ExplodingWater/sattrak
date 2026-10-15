@@ -31,6 +31,7 @@ public:
     void resetSimulation();
 
 private:
+    bool m_flowVisible=true, m_controlsVisible=false, m_benchmarkVisible=false;
     int m_nx = 80;
     int m_ny = 40;
     double m_machInf = 2.5;
