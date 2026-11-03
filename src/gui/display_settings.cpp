@@ -21,6 +21,8 @@ DisplaySettings::DisplaySettings(GLFWwindow* window,bool remember):window(window
         std::ifstream themeFile("local/color_theme.txt");int selected,contrast;
         if(themeFile>>selected>>contrast && selected>=0 && selected<theme::count && (contrast==0||contrast==1)) {
             colorTheme=selected;highContrast=contrast!=0;
+            int savedOutlines;
+            if(themeFile>>savedOutlines && (savedOutlines==0||savedOutlines==1))outlines=savedOutlines!=0;
         }
     }
     if(remember){std::ifstream scale("local/ui_scale.txt");int value;if(scale>>value)uiScale=std::clamp(value,75,200);}
@@ -121,17 +123,24 @@ bool DisplaySettings::apply(const State& state) {
     return true;
 }
 void DisplaySettings::update() {
-    if(uiScale!=appliedScale || colorTheme!=appliedTheme || highContrast!=appliedHighContrast) {
+    if(uiScale!=appliedScale || colorTheme!=appliedTheme || highContrast!=appliedHighContrast || outlines!=appliedOutlines) {
         uiScale=std::clamp(uiScale,75,200);appliedScale=uiScale;
         colorTheme=std::clamp(colorTheme,0,theme::count-1);
         appliedTheme=colorTheme;appliedHighContrast=highContrast;
+        appliedOutlines=outlines;
         ImGui::GetStyle()=baseStyle;
         theme::apply(ImGui::GetStyle(),baseStyle,colorTheme,highContrast);
         ImGui::GetStyle().ScaleAllSizes(uiScale/100.0f);
         ImGui::GetStyle().FontScaleMain=uiScale/100.0f;
         if(remember){std::error_code ec;std::filesystem::create_directories("local",ec);std::ofstream("local/ui_scale.txt")<<uiScale;}
-        if(remember)std::ofstream("local/color_theme.txt")<<colorTheme<<' '<<int(highContrast)<<'\n';
+        if(remember)std::ofstream("local/color_theme.txt")<<colorTheme<<' '<<int(highContrast)<<' '<<int(outlines)<<'\n';
     }
+    // ScaleAllSizes truncates 1px borders to zero below 100%. Apply the user's
+    // explicit outline preference after scaling, between frames, including
+    // display transitions and reverts. Keep separators and keyboard focus cues.
+    const float border=outlines?std::max(1.f,std::round(uiScale/100.f)):0.f;
+    auto& style=ImGui::GetStyle();
+    style.WindowBorderSize=style.ChildBorderSize=style.PopupBorderSize=style.FrameBorderSize=border;
     refreshMonitors();
     if(monitors.empty())return;
     if(current.monitor&&std::none_of(monitors.begin(),monitors.end(),[&](const Monitor& m){return m.handle==current.monitor;})) {
@@ -173,7 +182,8 @@ void DisplaySettings::draw() {
     }
     ImGui::Combo("Color theme",&colorTheme,theme::names,theme::count);
     ImGui::Checkbox("High contrast",&highContrast);
-    ImGui::TextWrapped("Theme changes apply immediately and are remembered. High contrast uses opaque dark surfaces, brighter text and clear control outlines.");
+    ImGui::Checkbox("Control and window outlines",&outlines);
+    ImGui::TextWrapped("Theme changes apply immediately and are remembered. High contrast uses opaque dark surfaces and brighter text. Turn outlines off for a softer look while keeping those colors, section separators and keyboard focus indicators.");
     ImGui::SliderInt("UI scale",&uiScale,75,200,"%d%%",ImGuiSliderFlags_AlwaysClamp);
     ImGui::SetNextItemWidth(90*ImGui::GetStyle().FontScaleMain);
     if(ImGui::InputInt("Scale percent",&uiScale,0,0))uiScale=std::clamp(uiScale,75,200);

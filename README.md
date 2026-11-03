@@ -80,6 +80,7 @@ it reverts automatically. Confirmed settings are remembered locally.
 Black and Red themes, each with a **High contrast** option. Changes apply immediately
 and are saved locally. Turn off High contrast with Original selected to restore
 the previous blue palette. High contrast is enabled by default.
+**Control and window outlines** is a separate toggle in the same section. Turn it off for a softer look without changing high-contrast colors. Enabled outlines remain visible at 75–200% UI scale and across display-mode changes.
 
 ## Keyboard access, text alternatives and terms
 
@@ -106,6 +107,8 @@ Enable **Atmospheric entry preview** in Settings to explore heating as a spacecr
 Heating uses an approximate atmosphere and a Sutton–Graves heat-flux estimate. The preview follows a prescribed descent; it does not predict breakup, ablation or whether a spacecraft would survive. It is an experimental visualization.
 
 ## Build from source
+
+For native macOS and Debian/Kali setup, dependencies, launch commands and current platform limitations, see the [platform guide](docs/PLATFORM_GUIDE.md). Native `.dmg` and `.deb` packages are not available yet.
 
 You need **CMake 3.20+**, a **C++20 compiler** and graphics drivers supporting **OpenGL 3.3**. On Windows, use Visual Studio's C++ build tools. On macOS, install the Xcode Command Line Tools and CMake.
 

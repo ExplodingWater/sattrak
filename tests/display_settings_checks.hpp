@@ -3,6 +3,7 @@
 #include "gui/color_theme.hpp"
 #include "gui/accessibility.hpp"
 #include <iostream>
+#include <cmath>
 namespace gui {
 struct DisplaySettingsChecks {
     static void scale(DisplaySettings& settings,int percent){settings.uiScale=percent;}
@@ -35,6 +36,22 @@ struct DisplaySettingsChecks {
             }
         }
         settings.colorTheme=0;settings.highContrast=true;settings.update();
+        // Regression: 75-99% scaling used to truncate every 1px border away.
+        // Outline visibility must be independent of the high-contrast palette.
+        auto bordersMatch=[&]() {
+            const auto& style=ImGui::GetStyle();
+            const float expected=settings.outlines?std::max(1.f,std::round(settings.uiScale/100.f)):0.f;
+            return style.FrameBorderSize==expected && style.WindowBorderSize==expected &&
+                style.ChildBorderSize==expected && style.PopupBorderSize==expected;
+        };
+        for(int selectedTheme=0;selectedTheme<gui::theme::count;++selectedTheme)
+            for(int percent:{75,90,100,150,200})for(bool enabled:{false,true}) {
+                settings.colorTheme=selectedTheme;settings.uiScale=percent;settings.outlines=enabled;settings.update();
+                okay &= bordersMatch();
+                const auto text=ImGui::GetStyle().Colors[ImGuiCol_Text];
+                okay &= text.x==1 && text.y==1 && text.z==1;
+            }
+        settings.colorTheme=0;settings.outlines=true;
         settings.uiScale=150;settings.update();
         okay &= ImGui::GetStyle().FontScaleMain==1.5f;
         settings.uiScale=100;settings.update();
@@ -62,7 +79,17 @@ struct DisplaySettingsChecks {
         glfwGetWindowSize(settings.window,&width,&height);
         okay &= settings.confirming && width==800 && height==600;
         settings.previous=initial;settings.previous.monitor=monitor.handle;settings.reverting=true;settings.update();
-        std::cout<<(okay?"Twelve theme variants, scale retention, high contrast, display modes and timed revert passed.\n":"Display settings checks failed.\n");
+        for(bool enabled:{false,true})for(int displayMode:{0,1,2}) {
+            settings.outlines=enabled;settings.uiScale=75;settings.mode=displayMode;
+            settings.width=monitor.width;settings.height=monitor.height;
+            settings.queued=true;settings.update();
+            okay &= bordersMatch() && settings.confirming;
+            settings.previous=initial;settings.previous.monitor=monitor.handle;
+            settings.reverting=true;settings.update();
+            okay &= bordersMatch() && !settings.confirming;
+        }
+        settings.uiScale=100;settings.outlines=true;settings.update();
+        std::cout<<(okay?"Themes, 75-200% scaling, independent outlines, all display modes and timed revert passed.\n":"Display settings checks failed.\n");
         return okay;
     }
 };
