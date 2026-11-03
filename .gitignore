@@ -59,3 +59,6 @@ catalog-invalid-test/
 # Discovered modes and local executable backups
 research_mode_unlocked.txt
 *.exe.old
+
+# Local task notes are not public repository content.
+/TODO.md
