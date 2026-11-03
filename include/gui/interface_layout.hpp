@@ -4,7 +4,7 @@
 namespace gui {
 inline int panelPlacement=2;
 inline bool topBarVisible=true, topBarHover=false;
-inline float topBarHeight(){return std::max(44.f*ImGui::GetStyle().FontScaleMain,ImGui::GetFrameHeight()+8);}
+inline float topBarHeight(){return std::max(32.f*ImGui::GetStyle().FontScaleMain,ImGui::GetFrameHeight()+4);}
 inline float topInset(){return topBarVisible?topBarHeight():0.f;}
 inline bool horizontalPanels(){return panelPlacement==0||panelPlacement==1||panelPlacement==3;}
 // Preserve the native slider's keyboard, drag and focus behavior, with a line and circular thumb.

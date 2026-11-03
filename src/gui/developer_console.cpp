@@ -1,3 +1,4 @@
+#include "gui/tutorial_state.hpp"
 #include "gui/developer_console.hpp"
 #include "gui/radio_commands.hpp"
 #include "gui/adcs_view.hpp"
@@ -152,7 +153,7 @@ void DeveloperConsole::execute(MusicPlayer& player,ADCSView& view,DisplaySetting
     }
 }
 void DeveloperConsole::draw(MusicPlayer& player,ADCSView& view,DisplaySettings& display){
-    if(ImGui::IsKeyPressed(ImGuiKey_GraveAccent,false)){open=!open;focus=open;}
+    if(!tutorialRunning && ImGui::IsKeyPressed(ImGuiKey_GraveAccent,false)){open=!open;focus=open;}
     if(!open)return;
     auto size=ImGui::GetIO().DisplaySize;
     ImGui::SetNextWindowSize(size,ImGuiCond_FirstUseEver);

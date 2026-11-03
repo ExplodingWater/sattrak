@@ -3,13 +3,74 @@
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
+#include <locale>
+#include <vector>
 
 using namespace gui;
 using aero::math::Vec3;
 void check(bool okay,const char* what){if(!okay)throw std::runtime_error(what);}
+void checkCsvErrors(const std::filesystem::path& fixtureFolder) {
+    const auto folder=std::filesystem::path("csv-validation-tests");
+    std::filesystem::create_directories(folder);
+    const auto file=folder/"input.csv";
+    const std::string header="# frame=EME2000\nutc,x_km,y_km,z_km,vx_km_s,vy_km_s,vz_km_s\n";
+    const std::string first="2026-09-13T00:00:00Z,7000,0,0,0,7.5,0\n";
+    const std::string last="2026-09-13T00:01:00Z,6985,450,0,-0.48,7.48,0\n";
+    OrbitReplay replay;std::string error;
+    check(replay.load(fixtureFolder/"demo.csv",error),"Validation baseline loads");
+    const auto savedName=replay.name;const auto savedFirst=replay.samples.front();
+    auto reject=[&](const std::string& content,const char* message){
+        {std::ofstream out(file,std::ios::binary);out<<content;}
+        check(!replay.load(file,error),message);
+        check(error.starts_with("Line ") && error.size()>8,"Invalid CSV returns an actionable error with a line number");
+        check(replay.samples.size()==601 && replay.name==savedName && replay.frame==OrbitFrame::EME2000 &&
+            replay.samples.front().utc==savedFirst.utc && (replay.samples.front().position-savedFirst.position).norm()==0,
+            "Rejected import preserves the previous trajectory");
+    };
+    reject("","Reject empty CSV");
+    reject(first+last,"Reject missing header and frame");
+    reject(header+first,"Reject fewer than two samples");
+    const std::vector<std::string> badRows={
+        "2026-09-13T00:01:00Z 6985 450 0 -0.48 7.48 0",
+        "2026-09-13T00:01:00Z,6985,,450,0,-0.48,7.48,0",
+        "2026-09-13T00:01:00Z,6985,450,0,-0.48,7.48,",
+        "2026-09-13T00:01:00Z,6985,450,0,-0.48,7.48,0,",
+        "2026-09-13T00:01:00Z,6985,450,0,-0.48,7.48",
+        "2026-09-13T00:01:00Z,6985,450,0,-0.48,7.48,0,10",
+        "2026-09-13T00:01:00Z,NaN,450,0,-0.48,7.48,0",
+        "2026-09-13T00:01:00Z,inf,450,0,-0.48,7.48,0",
+        "2026-09-13T00:01:00Z,1e999,450,0,-0.48,7.48,0",
+        "2026-09-13T00:01:00Z,6985km,450,0,-0.48,7.48,0",
+        "2026-09-13T00:01:00Z,6985,450,0,-0.48,7.48,0junk",
+        "2026-09-13T00:01:00Z,0,0,0,0,7.48,0",
+        "2026-09-13T00:01:00Z,6985,450,0,-0.48,101,0",
+        "2026-09-13T00:01:00Z,6985000,450000,0,-480,7480,0",
+        "2026-02-30T00:01:00Z,6985,450,0,-0.48,7.48,0",
+        "2026-09-13T00:01:60Z,6985,450,0,-0.48,7.48,0",
+        "2026-09-12T23:59:59Z,6985,450,0,-0.48,7.48,0",
+        "2026-09-13T00:00:00Z,6985,450,0,-0.48,7.48,0"
+    };
+    for(const auto& row:badRows){reject(header+first+row+"\n","Reject malformed CSV data row");check(error.starts_with("Line 4:"),"Data-row error identifies line four");}
+    check(!replay.load(folder/"does-not-exist.csv",error)&&replay.samples.size()==601&&!error.empty(),"Missing file fails without losing current data");
+    // UTF-8 filenames, BOM, CRLF, surrounding spaces, and decimal fractions are valid.
+    const auto unicode=folder/std::filesystem::path(u8"trajectoire-\u00e9-\u8f68\u9053.csv");
+    {std::ofstream out(unicode,std::ios::binary);out<<"\xEF\xBB\xBF# frame=EME2000\r\nutc,x_km,y_km,z_km,vx_km_s,vy_km_s,vz_km_s\r\n"
+        "2026-09-13T00:00:00.125Z, 7000 ,0,0,0,7.5,0\r\n2026-09-13T00:01:00.125Z,6985,450,0,-0.48,7.48,0\r\n";}
+    struct DecimalComma:std::numpunct<char>{char do_decimal_point()const override{return ',';}};
+    const auto originalLocale=std::locale();std::locale::global(std::locale(originalLocale,new DecimalComma));
+    const bool loaded=replay.load(unicode,error);
+    std::locale::global(originalLocale);
+    check(loaded && replay.samples.size()==2 && error.empty(),"BOM, CRLF, Unicode filename and decimal-locale import");
+    check(std::abs(replay.samples.front().utc-parseOrbitUtc("2026-09-13T00:00:00Z")-.125)<1e-6,"Fractional UTC survives locale changes");
+    OrbitSample interpolated;
+    check(replay.sample(replay.samples.front().utc+30,interpolated),"Valid CSV can be interpolated after rejected imports");
+    std::filesystem::remove(file);std::filesystem::remove(unicode);std::filesystem::remove(folder);
+    std::cout<<"Strict CSV validation, line errors, Unicode/BOM/CRLF, locale independence and transactional rejection passed\n";
+}
 int main(int argc,char** argv) {
     try {
         check(argc==2,"Fixture directory argument");auto folder=std::filesystem::path(argv[1]);
+        checkCsvErrors(folder);
         OrbitReplay oem,csv;std::string error;
         check(oem.load(folder/"demo.oem",error),error.c_str());check(csv.load(folder/"demo.csv",error),error.c_str());
         check(oem.samples.size()==601&&csv.samples.size()==601,"Both formats parsed");

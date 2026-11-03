@@ -1,3 +1,4 @@
+#include "gui/tutorial_state.hpp"
 #include "gui/adcs_view.hpp"
 #include "gui/numeric_widgets.hpp"
 #include "gui/accessibility.hpp"
@@ -80,6 +81,7 @@ void ADCSView::renderViewTexture(MultiView& v,int width,int height) {
     glBindFramebuffer(GL_FRAMEBUFFER,0);
 }
 void ADCSView::moveViewCamera(MultiView& v,double dx,double dy,bool right,double wheel,GLFWwindow* window,float dt,bool keyboard) {
+    if(tutorialRunning)return;
     applyCamera(v.camera);
     if(right) {if(m_camPreset!=CameraPreset::FreeFlycam)enterFlycam();rotateFlycam(dx,dy);}
     else if(m_camPreset==CameraPreset::SatelliteOrbit)rotateSatelliteOrbit(float(dx),float(dy));

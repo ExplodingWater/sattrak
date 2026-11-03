@@ -13,6 +13,7 @@ public:
     void attachActions(ActionBindings& actions) { actionBindings=&actions; }
     void draw(MusicPlayer& player, ADCSView& view, DisplaySettings& display);
 private:
+    friend class Tutorial;
     friend struct ConsoleChecks;
     bool open=false,focus=false;
     ActionBindings* actionBindings=nullptr;

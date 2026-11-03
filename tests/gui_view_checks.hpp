@@ -59,6 +59,50 @@ struct ADCSViewChecks {
         if(frame==8)view.seekReplay(2400);
         if(frame==12){view.stopReplay();view.m_numericalOrbit=true;view.m_orbitForces.j2=true;view.m_orbitForces.drag=true;view.m_sensorNoise=true;view.m_gravityGradient=true;view.initializeNumericalOrbit();for(int i=0;i<200;++i)view.advancePhysics(.005);}
     }
+    static bool checkOrbitFrame(ADCSView& view,int frame) {
+        if(frame!=1 && frame!=9)return true;
+        const double seconds=frame==1?1200:2400;
+        if(!view.m_replayActive || view.m_replay.samples.size()!=601 || view.m_reference.samples.size()!=601) {
+            std::cerr<<"Trajectory fixtures did not load: "<<view.m_replayMessage<<'\n';return false;
+        }
+        bool okay=true;
+        okay &= std::abs(view.m_replaySeconds-seconds)<1e-6 && view.m_trail.size()>10;
+        okay &= std::abs(view.m_currentOrbit.utc-view.m_replay.samples.front().utc-seconds)<1e-6;
+        if(frame==1) {
+            const auto oldPosition=view.m_satPosECI;const auto trailSize=view.m_trail.size();
+            const auto file=std::filesystem::path("invalid-replay-ui-test.csv");
+            {std::ofstream out(file);out<<"# frame=EME2000\nutc,x_km,y_km,z_km,vx_km_s,vy_km_s,vz_km_s\n2026-09-13T00:00:00Z,7000,,0,0,7,0\n";}
+            okay &= !view.loadReplay(file) && view.m_replayMessage.find("Line 3:")!=std::string::npos;
+            okay &= !view.loadReplay(file,true) && view.m_reference.samples.size()==601;
+            okay &= view.m_replayActive && view.m_isPaused && view.m_replaySeconds==seconds && view.m_trail.size()==trailSize;
+            okay &= (view.m_satPosECI-oldPosition).norm()==0;
+            std::filesystem::remove(file);
+        }
+        if(!okay)std::cerr<<"Trajectory replay/seek/error preservation check failed: "<<view.m_replayMessage<<'\n';
+        return okay;
+    }
+    // Deterministic cameras for clean captures of the actual application renderer.
+    static void prepareBrandingFrame(ADCSView& view,int frame) {
+        view.m_isPaused=true;view.m_hudVisible=false;view.m_showAltimeters=false;
+        view.m_settingsVisible=false;view.m_openSettings=false;view.m_replayWindow=false;
+        view.m_showResearch=false;view.m_showTrail=false;view.m_multiView=false;
+        view.m_discoveryUntil=0;view.m_entryPreview=false;view.m_alarmMuted=true;
+        view.setMarkerOpacity(0);view.m_orbitAltitudeKm=650;
+        view.m_cameraFov=48;view.m_earthSpinAngleRad=.4;
+        if(frame%4!=0)return;
+        view.setRealScale(false);
+        if(frame<4) {
+            view.selectModel(1);
+            view.m_camPreset=CameraPreset::FreeOrbitArcball;
+            view.m_arcballCenter={};view.m_arcballDist=34;view.m_arcballYaw=.9f;view.m_arcballPitch=.25f;
+        } else {
+            const int model=frame<8?1:frame<12?2:frame<16?5:3;
+            view.selectModel(model);view.m_camPreset=CameraPreset::SatelliteOrbit;
+            view.setRealScale(true);
+            view.m_satOrbitDistance=7*view.modelFramingScale();
+            view.m_satOrbitYaw=.45f;view.m_satOrbitPitch=.1f;
+        }
+    }
     static void prepareMultiFrame(ADCSView& view,int frame) {
         if(frame==0){view.enableMultiView(true);view.m_viewCount=8;}
         if(frame==8)view.m_separateViews=true;

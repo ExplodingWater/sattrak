@@ -24,6 +24,8 @@
 #include "gui/music_icons.hpp"
 #include "gui/panel_sidebar.hpp"
 #include "gui/accessibility_panel.hpp"
+#include "gui/tutorial.hpp"
+#include "../../tests/tutorial_checks.hpp"
 #include "../../tests/accessibility_checks.hpp"
 #include "../../tests/gui_view_checks.hpp"
 #include "../../tests/display_settings_checks.hpp"
@@ -86,6 +88,9 @@ void applyStealthAerospaceTheme() {
 }
 
 int main(int argc, char** argv) {
+    const bool tutorialSmoke = argc > 1 && std::strcmp(argv[1], "--tutorial-smoke-test") == 0;
+    const bool tutorialCompact = tutorialSmoke && argc > 2 && std::strcmp(argv[2], "--compact") == 0;
+    const bool brandingCapture = argc > 1 && std::strcmp(argv[1], "--capture-branding") == 0;
     const bool accessibilitySmoke = argc > 1 && std::strcmp(argv[1], "--accessibility-smoke-test") == 0;
     const bool multiSmoke = argc > 1 && std::strcmp(argv[1], "--multiview-smoke-test") == 0;
     const bool issDepthSmoke = argc > 1 && std::strcmp(argv[1], "--iss-depth-smoke-test") == 0;
@@ -97,7 +102,7 @@ int main(int argc, char** argv) {
     const bool displaySmoke = argc > 1 && std::strcmp(argv[1], "--display-smoke-test") == 0;
     const bool catalogSmoke = argc > 1 && std::strcmp(argv[1], "--catalog-smoke-test") == 0;
     const bool interfaceSmoke = argc > 1 && std::strcmp(argv[1], "--interface-smoke-test") == 0;
-    const bool smokeTest = interfaceSmoke || accessibilitySmoke || catalogSmoke || displaySmoke || consoleSmoke || startupSmoke || orbitSmoke || multiSmoke || modelSmoke || (argc > 1 && std::strcmp(argv[1], "--smoke-test") == 0);
+    const bool smokeTest = tutorialSmoke || brandingCapture || interfaceSmoke || accessibilitySmoke || catalogSmoke || displaySmoke || consoleSmoke || startupSmoke || orbitSmoke || multiSmoke || modelSmoke || (argc > 1 && std::strcmp(argv[1], "--smoke-test") == 0);
     if (!std::filesystem::exists("earth_texture.jpg")) {
         auto executableDir = std::filesystem::absolute(argv[0]).parent_path();
         if (std::filesystem::exists(executableDir / "earth_texture.jpg"))
@@ -225,19 +230,22 @@ int main(int argc, char** argv) {
     }
 
     int activeStudioTab = 0; // 0: GNC & ADCS Studio, 1: Supersonic CFD Studio
+    gui::Tutorial tutorial(!smokeTest);
+    if(tutorialSmoke)gui::tutorialRequested=true;
     double lastTime = glfwGetTime();
 
     // Main Simulation & Rendering Loop
     while (!glfwWindowShouldClose(window)) {
-        if (modelSmoke && smokeFrame == 0) glfwSetWindowSize(window, 1920, 1080);
+        if ((modelSmoke || brandingCapture || tutorialSmoke) && smokeFrame == 0) glfwSetWindowSize(window, tutorialCompact?900:1920, tutorialCompact?700:1080);
+        if(tutorialCompact && smokeFrame==0)gui::DisplaySettingsChecks::scale(displaySettings,150);
         if(interactionSmoke){
             if(smokeFrame==4)glfwSetWindowSize(window,1000,900);
             if(smokeFrame==8){glfwSetWindowSize(window,1400,850);gui::DisplaySettingsChecks::scale(displaySettings,125);}
             if(smokeFrame==12){glfwSetWindowSize(window,900,1000);gui::DisplaySettingsChecks::scale(displaySettings,100);}
             if(smokeFrame==16)glfwSetWindowSize(window,1600,900);
         }
-        if (smokeTest && !modelSmoke && smokeFrame == 4) glfwSetWindowSize(window, 900, 1100);
-        if (smokeTest && !modelSmoke && smokeFrame == 8) glfwSetWindowSize(window, 2400, 800);
+        if (smokeTest && !tutorialSmoke && !modelSmoke && !brandingCapture && smokeFrame == 4) glfwSetWindowSize(window, 900, 1100);
+        if (smokeTest && !tutorialSmoke && !modelSmoke && !brandingCapture && smokeFrame == 8) glfwSetWindowSize(window, 2400, 800);
         glfwPollEvents();
         if(catalogSmoke&&smokeFrame==8)gui::DisplaySettingsChecks::scale(displaySettings,150);
         if(catalogSmoke&&smokeFrame==12)gui::DisplaySettingsChecks::scale(displaySettings,200);
@@ -287,10 +295,15 @@ int main(int argc, char** argv) {
         if(smokeTest&&smokeFrame==0)smokeFailed |= !gui::ADCSViewChecks::checkDataFallback(adcsView);
         if(startupSmoke&&smokeFrame==0)gui::ADCSViewChecks::showStartupChoice(adcsView);
         musicPlayer.update(currentTime);
+        if(tutorialSmoke && smokeFrame==0)smokeFailed |= !gui::TutorialChecks::run(tutorial,adcsView,cfdView,console,accessibilityPanel,activeStudioTab);
+        tutorial.prepare(adcsView,cfdView,console,accessibilityPanel,activeStudioTab);
+        if(tutorialSmoke && smokeFrame%4==0) { tutorial.goTo(smokeFrame/4); tutorial.prepare(adcsView,cfdView,console,accessibilityPanel,activeStudioTab); }
+        ImGui::PushStyleVar(ImGuiStyleVar_DisabledAlpha,tutorial.active()?1.f:ImGui::GetStyle().DisabledAlpha);
+        ImGui::BeginDisabled(tutorial.active());
         console.draw(musicPlayer,adcsView,displaySettings);
         if(consoleSmoke&&smokeFrame==18)smokeFailed |= !gui::ConsoleChecks::suggestionsAfterCommands(console);
-        accessibilityPanel.keyboard(console.isOpen());
-        adcsView.actions().process(activeStudioTab!=0||console.isOpen());
+        if(!tutorial.active())accessibilityPanel.keyboard(console.isOpen());
+        adcsView.actions().process(tutorial.active()||activeStudioTab!=0||console.isOpen());
 
         if(interfaceSmoke){gui::panelPlacement=smokeFrame/4;gui::topBarVisible=(smokeFrame%4)>=2;}
         // Top Command Bar (Tab Selector)
@@ -325,7 +338,7 @@ int main(int argc, char** argv) {
         if(gui::topBarVisible) {
         ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, gui::topBarHeight()));
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,ImVec2(6*uiScale,12*uiScale));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,ImVec2(6*uiScale,7*uiScale));
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding,1*uiScale);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,0);
         ImGui::Begin("TopBar", nullptr,
@@ -430,19 +443,21 @@ int main(int argc, char** argv) {
             glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Deep Space Black
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-            if(interactionSmoke)gui::InteractionChecks::prepare(adcsView,smokeFrame);
+            if(brandingCapture)gui::ADCSViewChecks::prepareBrandingFrame(adcsView,smokeFrame);
+            else if(interactionSmoke)gui::InteractionChecks::prepare(adcsView,smokeFrame);
             else if(catalogSmoke)gui::ADCSViewChecks::prepareCatalogFrame(adcsView,smokeFrame);
             else if(orbitSmoke)gui::ADCSViewChecks::prepareOrbitFrame(adcsView,smokeFrame);
             else if(multiSmoke)gui::ADCSViewChecks::prepareMultiFrame(adcsView,smokeFrame);
             else if(issDepthSmoke)gui::ADCSViewChecks::prepareIssDepthFrame(adcsView,smokeFrame);
             else if(modelSmoke)gui::ADCSViewChecks::prepareModelFrame(adcsView,smokeFrame);
-            else if (smokeTest && !accessibilitySmoke && !startupSmoke && !consoleSmoke) gui::ADCSViewChecks::prepareFrame(adcsView, smokeFrame);
+            else if (smokeTest && !tutorialSmoke && !accessibilitySmoke && !startupSmoke && !consoleSmoke) gui::ADCSViewChecks::prepareFrame(adcsView, smokeFrame);
             adcsView.update(dt);
-            if (smokeTest && smokeFrame >= 8) {
+            if (smokeTest && !tutorialSmoke && !brandingCapture && smokeFrame >= 8) {
                 ImGui::SetScrollY(ImGui::FindWindowByName("Flight Director & Camera"), 650);
             }
-            adcsView.drawUI(smokeTest);
-            if (smokeTest && !accessibilitySmoke && !catalogSmoke && !displaySmoke && !consoleSmoke && !startupSmoke && !orbitSmoke && !modelSmoke && !multiSmoke) smokeFailed |= !gui::ADCSViewChecks::checkRouting(adcsView, smokeFrame);
+            adcsView.drawUI(smokeTest && !tutorialSmoke);
+            if(orbitSmoke)smokeFailed |= !gui::ADCSViewChecks::checkOrbitFrame(adcsView,smokeFrame);
+            if (smokeTest && !tutorialSmoke && !brandingCapture && !accessibilitySmoke && !catalogSmoke && !displaySmoke && !consoleSmoke && !startupSmoke && !orbitSmoke && !modelSmoke && !multiSmoke) smokeFailed |= !gui::ADCSViewChecks::checkRouting(adcsView, smokeFrame);
             adcsView.renderViews(window,dt);
             adcsView.drawAltimeters();
         } else {
@@ -462,9 +477,13 @@ int main(int argc, char** argv) {
         displaySettings.drawConfirmation();
         if(!console.isOpen())adcsView.actions().drawNotice();
 
+        ImGui::EndDisabled();
+        ImGui::PopStyleVar();
+        tutorial.draw(adcsView,cfdView,console,accessibilityPanel,activeStudioTab);
+        if(tutorialSmoke && smokeFrame%4==3 && !tutorial.targetVisible()) { std::cerr << "Tutorial target missing at step " << tutorial.currentStep()+1 << "\n"; smokeFailed=true; }
         // Render ImGui onto screen
         ImGui::Render();
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        if(!brandingCapture)ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         if(interfaceSmoke) {
             auto* strip=ImGui::FindWindowByName("Orbital panels");
@@ -480,7 +499,7 @@ int main(int argc, char** argv) {
         }
         if (smokeTest) {
             const char* panels[] = {"GNC & Orbital Telemetry", "Live Strip-Charts (ImPlot)", "Flight Director & Camera", "2D Ground Track (ECEF)"};
-            for (int i = 0; activeStudioTab == 0 && i < 4; ++i) {
+            for (int i = 0; !tutorialSmoke && !brandingCapture && activeStudioTab == 0 && i < 4; ++i) {
                 ImGuiWindow* panel = ImGui::FindWindowByName(panels[i]);
                 if (!panel) { smokeFailed=true; continue; }
                 float edge = i < 2 ? panel->Pos.x - gui::panelSidebarWidth() : io.DisplaySize.x - panel->Pos.x - panel->Size.x - (gui::panelPlacement==4?64*uiScale:0);
@@ -489,17 +508,17 @@ int main(int argc, char** argv) {
                     smokeFailed = true;
                 }
             }
-            if (smokeFrame == 3 || smokeFrame == 7 || smokeFrame == 11 || smokeFrame == 15 || smokeFrame == 19) {
+            if ((tutorialSmoke && smokeFrame%4==3) || smokeFrame == 3 || smokeFrame == 7 || smokeFrame == 11 || smokeFrame == 15 || smokeFrame == 19) {
                 std::vector<unsigned char> pixels(windowWidth * windowHeight * 3);
                 glPixelStorei(GL_PACK_ALIGNMENT, 1);
                 glReadPixels(0, 0, windowWidth, windowHeight, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
-                std::ofstream shot("smoke-" + std::to_string(smokeFrame) + ".ppm", std::ios::binary);
+                std::ofstream shot(std::string(tutorialCompact?"tutorial-compact-":tutorialSmoke?"tutorial-":brandingCapture?"capture-":"smoke-") + std::to_string(smokeFrame) + ".ppm", std::ios::binary);
                 shot << "P6\n" << windowWidth << " " << windowHeight << "\n255\n";
                 for (int y = windowHeight-1; y >= 0; --y)
                     shot.write(reinterpret_cast<const char*>(pixels.data() + y*windowWidth*3), windowWidth*3);
             }
             if (glGetError() != GL_NO_ERROR) smokeFailed = true;
-            if (++smokeFrame == 20) glfwSetWindowShouldClose(window, GLFW_TRUE);
+            if (++smokeFrame == (tutorialSmoke?gui::Tutorial::totalSteps*4:20)) glfwSetWindowShouldClose(window, GLFW_TRUE);
         }
         glfwSwapBuffers(window);
     }

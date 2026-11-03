@@ -121,6 +121,9 @@ add_custom_command(TARGET ag POST_BUILD
         "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE" "$<TARGET_FILE_DIR:ag>/LICENSE"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_CURRENT_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:ag>/assets")
+if(WIN32)
+    include(packaging/windows/installer.cmake)
+endif()
 endif()
 
 # ==============================================================================
@@ -128,6 +131,8 @@ endif()
 # ==============================================================================
 include(CTest)
 if(BUILD_TESTING)
+add_executable(test_tutorial_state tests/test_tutorial_state.cpp)
+add_test(NAME Test_Tutorial_State COMMAND test_tutorial_state)
 
 add_executable(test_adcs
     tests/test_quaternion_mekf.cpp

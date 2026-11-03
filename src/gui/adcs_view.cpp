@@ -1,5 +1,6 @@
 #include "gui/adcs_view.hpp"
 #include "gui/panel_sidebar.hpp"
+#include "gui/tutorial_state.hpp"
 #include "gui/slew_profile.hpp"
 #include "gui/numeric_widgets.hpp"
 #include "gui/accessibility.hpp"
@@ -327,6 +328,11 @@ bool ADCSView::init() {
 }
 
 void ADCSView::handleInput(GLFWwindow* window, float dt) {
+    if(tutorialRunning) {
+        glfwSetInputMode(window,GLFW_CURSOR,GLFW_CURSOR_NORMAL);
+        m_isRightClickDragging=m_isLeftClickDragging=false;
+        return;
+    }
     ImGuiIO& io = ImGui::GetIO();
     m_actualUserSpeedKmS = 0;
     if (!glfwGetWindowAttrib(window, GLFW_FOCUSED) || glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
@@ -1122,6 +1128,8 @@ void ADCSView::drawSettings() {
         ImGui::SeparatorText(categories[m_settingsCategory]);
         ImGui::PushItemWidth(std::min(260.f*scale,ImGui::GetContentRegionAvail().x*.48f));
         if(m_settingsCategory==0) {
+        if(ImGui::Button("Restart guided tutorial", ImVec2(-1,28*scale))) tutorialRequested=true;
+        ImGui::TextWrapped("Tour every main panel, with a spotlight and step-by-step explanations. Skip or finish at any time.");
         ImGui::TextWrapped("Spacecraft, simulation, sound and satellite data.");
         const char* names[]={"Low poly","Landsat 8","Hubble Space Telescope","Terra","GOES-R","International Space Station"};
         if (ImGui::BeginCombo("Satellite model", names[m_selectedModel])) {

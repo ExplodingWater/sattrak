@@ -15,4 +15,8 @@ utc,x_km,y_km,z_km,vx_km_s,vy_km_s,vz_km_s
 
 Single-segment CCSDS OEM text (KVN) is also supported. Use Earth-centered UTC samples in EME2000/J2000 or ECEF/ITRF. TEME, XML, other time systems, and multiple segments are rejected. Samples must be strictly increasing; interpolation is cubic Hermite with no extrapolation. Limits: 64 MiB and 500,000 samples.
 
+CSV data rows must have exactly seven comma-separated, nonempty fields. Use decimal points, finite numeric positions/velocities, valid UTC dates, and the specified kilometer units. Extra/missing commas, NaN/Infinity, trailing junk, duplicate/reversed times and invalid Earth-centered states are rejected with a line-specific error in the replay window. A failed load preserves the existing primary and comparison trajectories. UTF-8 filenames, an optional UTF-8 BOM, LF/CRLF line endings, surrounding field whitespace and fractional UTC seconds are supported. Quoted fields and other CSV column layouts are not supported. Generic launch CSVs containing only time/altitude or latitude/longitude must be converted to this Cartesian state format first.
+
+`Test_Orbit_Replay` verifies import, analytic interpolation, UTC/frame handling and malformed CSV rejection. `ag.exe --orbit-smoke-test` exercises primary/comparison loading, seeking and invalid-import preservation with the real OpenGL viewer.
+
 Earth orientation uses approximate GMST, without precession, nutation, polar motion or measured Earth-orientation parameters. Station visibility uses a spherical Earth and geometric elevation. Replay positions follow the imported ephemeris; attitude remains a separate simulation. This is an exploration and comparison tool, not operational navigation software.

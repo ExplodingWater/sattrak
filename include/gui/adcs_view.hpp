@@ -111,6 +111,7 @@ public:
     void onScroll(double yoffset);
 
 private:
+    friend class Tutorial;
     friend class DeveloperConsole;
     friend struct ConsoleChecks;
     friend struct InteractionChecks;

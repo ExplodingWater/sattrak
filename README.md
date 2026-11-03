@@ -1,8 +1,30 @@
+![sattrak — Explore Earth from orbit, captured in the application](docs/images/sattrak-banner.png)
+
 # sattrak
+
+**[Download for Windows](https://github.com/ExplodingWater/sattrak/releases/download/v1.0.0-preview.20261103/sattrak-1.0.0-windows-x64-setup.exe)** · [Release notes](https://github.com/ExplodingWater/sattrak/releases/tag/v1.0.0-preview.20261103) · [Screenshot tutorial](docs/TUTORIAL.md)
+
+The Windows preview includes the branded installation wizard, bundled models and offline satellite catalog. Install for your Windows account, then follow the guided first-run tutorial. Restart it any time from **Settings → General → Restart guided tutorial**.
 
 sattrak is a desktop satellite simulator for exploring Earth from orbit. Follow a spacecraft, fly around it, watch its path across the globe, or see a pass from a ground station. It started as a personal aerospace project and is still growing.
 
 Built by **Martin Hafizi ([ExplodingWater](https://github.com/ExplodingWater))**. Made with love.
+
+<p>
+  <img src="docs/images/sattrak-landsat.png" alt="Landsat 8 beside Earth's limb, captured in sattrak" width="49%">
+  <img src="docs/images/sattrak-iss.png" alt="The ISS above Earth's horizon, captured in sattrak" width="49%">
+</p>
+
+All imagery above comes from sattrak's own renderer. See [branding and capture notes](docs/BRANDING.md).
+
+## Learn the interface
+
+<p>
+  <img src="docs/images/tutorial-panels.png" alt="Guided tutorial spotlighting sattrak's panel buttons" width="49%">
+  <img src="docs/images/tutorial-camera.png" alt="Flight director explained in sattrak's guided tutorial" width="49%">
+</p>
+
+The 22-step walkthrough opens and spotlights each main part of the UI. Use **< current / total >**, jump with **Choose a step…**, or **Skip tutorial** at any time. The final step has **Finish tutorial**. [See the full screenshot guide](docs/TUTORIAL.md) for orbit import, recording, settings and the shock explorer.
 
 ## What you can do
 
@@ -19,11 +41,11 @@ Optional music and recorded amateur-radio communications accompany the view. The
 
 ## Get started
 
-Windows builds are available under [Releases](https://github.com/ExplodingWater/sattrak/releases). Extract the whole ZIP and run **ag.exe**, keeping `assets/` and `earth_texture.jpg` beside it. Releases marked **Pre-release** are development previews.
+Windows builds are available under [Releases](https://github.com/ExplodingWater/sattrak/releases). If a setup executable is provided, run it to install for your Windows account. For portable ZIPs, extract the whole archive and run **ag.exe**, keeping `assets/` and `earth_texture.jpg` beside it. Releases marked **Pre-release** are development previews.
 
 Use **Flight Director & Camera** to choose a view and open **Settings**. Move over the 3D view with **WASD**, hold the **right mouse button** or use the **arrow keys** to look around, and scroll to zoom. **Satellite Orbit** keeps the spacecraft in the center while you rotate around it. Hover over controls for explanations.
 
-The orbit window contains **Record path**, **Stop recording**, **Save** and **Save As...**. Save writes to `local/recordings` under the launch folder. Starting another recording or exiting discards unsaved work; saved files remain. See the [orbit file guide](assets/orbits/README.md) for supported imports.
+The orbit window contains **Record path**, **Stop recording**, **Save** and **Save As...**. Save writes to `local/recordings` under the launch folder. Starting another recording or exiting discards unsaved work; saved files remain. See the [orbit file guide](assets/orbits/README.md) for supported imports. Invalid CSV imports show a line-specific error and preserve the previously loaded primary and comparison paths.
 
 Press **backtick (`)** for the command console. Use Up/Down to select suggestions and Tab to complete them. For example, `radio.play 01` plays the first recording in `assets/radio`, and `radio.stop` stops radio playback.
 

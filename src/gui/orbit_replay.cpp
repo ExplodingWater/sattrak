@@ -1,5 +1,6 @@
 #include "gui/orbit_replay.hpp"
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <fstream>
@@ -23,6 +24,31 @@ OrbitFrame readFrame(const std::string& text) {
     throw std::runtime_error("Unsupported reference frame: "+text+". Use EME2000 or Earth-fixed ITRF/ECEF.");
 }
 Vec3 rotateZ(Vec3 p,double a) {const double c=std::cos(a),s=std::sin(a);return {c*p.x-s*p.y,s*p.x+c*p.y,p.z};}
+OrbitSample readCsvSample(const std::string& line) {
+    constexpr const char* columns[]={"utc","x_km","y_km","z_km","vx_km_s","vy_km_s","vz_km_s"};
+    std::array<std::string,7> cells;
+    size_t start=0;
+    for(size_t i=0;i<cells.size();++i) {
+        const auto comma=line.find(',',start);
+        if((i<6 && comma==std::string::npos)||(i==6 && comma!=std::string::npos))
+            throw std::runtime_error("CSV requires exactly seven comma-separated columns; check missing or extra commas.");
+        cells[i]=trim(line.substr(start,comma==std::string::npos?comma:comma-start));
+        if(cells[i].empty())throw std::runtime_error(std::string("Empty CSV field: ")+columns[i]+".");
+        start=comma==std::string::npos?line.size():comma+1;
+    }
+    OrbitSample state;
+    try {state.utc=parseOrbitUtc(cells[0]);}
+    catch(const std::exception& ex) {throw std::runtime_error(std::string("Invalid utc: ")+ex.what());}
+    double* numbers[]={&state.position.x,&state.position.y,&state.position.z,&state.velocity.x,&state.velocity.y,&state.velocity.z};
+    for(size_t i=0;i<6;++i) {
+        std::istringstream value(cells[i+1]);value.imbue(std::locale::classic());
+        if(!(value>>*numbers[i])||!std::isfinite(*numbers[i]))
+            throw std::runtime_error(std::string("Invalid finite number in ")+columns[i+1]+"; use a decimal point and km or km/s units.");
+        value>>std::ws;
+        if(!value.eof())throw std::runtime_error(std::string("Unexpected characters in ")+columns[i+1]+".");
+    }
+    return state;
+}
 }
 double parseOrbitUtc(const std::string& value) {
     using namespace std::chrono;
@@ -32,7 +58,9 @@ double parseOrbitUtc(const std::string& value) {
     for(size_t i=0;i<t.size();++i)if(i!=4&&i!=7&&i!=10&&i!=13&&i!=16&&!(i==19&&t[i]=='.')&&(t[i]<'0'||t[i]>'9'))throw std::runtime_error("Invalid UTC timestamp.");
     if(t.size()>19 && (t[19]!='.'||t.size()==20))throw std::runtime_error("Invalid UTC fraction.");
     int y=std::stoi(t.substr(0,4)),m=std::stoi(t.substr(5,2)),d=std::stoi(t.substr(8,2));
-    int h=std::stoi(t.substr(11,2)),minute=std::stoi(t.substr(14,2));double sec=std::stod(t.substr(17));
+    int h=std::stoi(t.substr(11,2)),minute=std::stoi(t.substr(14,2));double sec=0;
+    std::istringstream seconds(t.substr(17));seconds.imbue(std::locale::classic());
+    if(!(seconds>>sec)||!std::isfinite(sec))throw std::runtime_error("Invalid UTC seconds.");
     year_month_day date{year{y},month{unsigned(m)},day{unsigned(d)}};
     if(!date.ok()||y<1957||y>2200||h>23||minute>59||sec>=60)throw std::runtime_error("Invalid UTC date/time (leap-second epochs are not supported).");
     return double(sys_days{date}.time_since_epoch().count())*86400+h*3600+minute*60+sec;
@@ -53,7 +81,7 @@ bool OrbitReplay::load(const std::filesystem::path& path,std::string& error) {
     try {
         if(std::filesystem::file_size(path)>64*1024*1024)throw std::runtime_error("File exceeds 64 MiB limit.");
         std::ifstream in(path);if(!in)throw std::runtime_error("Cannot open orbit file.");
-        OrbitReplay next;next.name=path.filename().string();
+        OrbitReplay next;const auto filename=path.filename().u8string();next.name.assign(filename.begin(),filename.end());
         std::string line;bool oem=false,meta=false,cov=false,header=false,frameSet=false,timeSet=false,earth=false;int segments=0;
         while(std::getline(in,line)) {
             ++lineNumber;if(line.size()>16384)throw std::runtime_error("Line too long.");
@@ -83,18 +111,22 @@ bool OrbitReplay::load(const std::filesystem::path& path,std::string& error) {
                 if(!frameSet)throw std::runtime_error("CSV requires # frame=EME2000 or # frame=ECEF before the header.");header=true;continue;
             }
             if(!header||meta)throw std::runtime_error("Position samples must follow metadata/header.");
-            if(!oem)std::replace(line.begin(),line.end(),',',' ');
-            std::istringstream row(line);row.imbue(std::locale::classic());std::string epoch;OrbitSample state;
+            OrbitSample state;
+            if(!oem)state=readCsvSample(line);
+            else {
+            std::istringstream row(line);row.imbue(std::locale::classic());std::string epoch;
             if(!(row>>epoch>>state.position.x>>state.position.y>>state.position.z>>state.velocity.x>>state.velocity.y>>state.velocity.z))throw std::runtime_error("Expected timestamp, three positions and three velocities.");
             // OEM acceleration columns are allowed, but replay uses cubic Hermite position/velocity interpolation.
             std::vector<double> extra;double x;while(row>>x)extra.push_back(x);
             if(!row.eof()||(!extra.empty()&&(!oem||extra.size()!=3)))throw std::runtime_error("Invalid trailing columns.");
             for(double a:extra)if(!std::isfinite(a))throw std::runtime_error("Nonfinite acceleration.");
             state.utc=parseOrbitUtc(epoch);
+            }
             if(!std::isfinite(state.position.norm())||!std::isfinite(state.velocity.norm())||state.position.norm()<6370||state.position.norm()>1e7||state.velocity.norm()>100)throw std::runtime_error("Invalid Earth-orbit state; check kilometer units.");
             if(!next.samples.empty()&&state.utc<=next.samples.back().utc)throw std::runtime_error("Timestamps must strictly increase (no duplicates).");
             next.samples.push_back(state);if(next.samples.size()>500000)throw std::runtime_error("Too many samples (maximum 500000).");
         }
+        if(in.bad())throw std::runtime_error("Could not finish reading orbit file; the previous trajectory was kept.");
         if(cov||meta||next.samples.size()<2)throw std::runtime_error("Incomplete file or fewer than two samples.");
         *this=std::move(next);error.clear();return true;
     } catch(const std::exception& ex) {error="Line "+std::to_string(lineNumber)+": "+ex.what();return false;}
