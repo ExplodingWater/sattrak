@@ -27,11 +27,11 @@ The orbit window contains **Record path**, **Stop recording**, **Save** and **Sa
 
 Press **backtick (`)** for the command console. Use Up/Down to select suggestions and Tab to complete them. For example, `radio.play 01` plays the first recording in `assets/radio`, and `radio.stop` stops radio playback.
 
-Type `help` for available commands. You can adjust simulation speed, camera sensitivity and field of view, orbit altitude and inclination, master volume and UI scale. Suggestions appear as you type; entering a value command without its argument shows its range and default. The console works while Settings and orbit replay are open.
+Type `help` for available commands. You can adjust simulation speed, camera sensitivity and field of view, orbit altitude and inclination, master volume and UI scale. Suggestions appear as you type, and entering a value command without its argument shows its range and default. The console works while Settings and orbit replay are open.
 
 Settings uses a **General / Video / Controls / Advanced** sidebar. Video includes
-spacecraft marker opacity: `hud.spacecraft_marker 0.35` fades the circle and its
-label; `0` hides them and `1` is fully opaque. The preference is remembered.
+spacecraft marker opacity, for example: `hud.spacecraft_marker 0.35` fades the circle and its
+label; `0` hides them and `1` is fully opaque. The preference is stored.
 Camera and satellite altimeters report kilometres above the simulated spherical
 Earth surface; range is the separate camera-to-spacecraft distance. In Multi View,
 the camera altitude readout follows View 1. These are not terrain-clearance measurements.
@@ -49,7 +49,7 @@ and Restore view. `view.save` remembers the camera/HUD preset for the current se
 
 **Settings → Display** offers Fullscreen, Fullscreen Windowed and Windowed modes.
 Choose a monitor and resolution preset, or type a width and height. Presets stay
-within the monitor's reported maximum; exclusive fullscreen requires a supported
+within the monitor's reported maximum, whereas exclusive fullscreen requires a supported
 display mode. Fullscreen Windowed uses the desktop resolution. Windowed sizes fit
 inside the desktop work area. Apply, then keep the change within 15 seconds, or
 it reverts automatically. Confirmed settings are remembered locally.
