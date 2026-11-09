@@ -44,9 +44,17 @@ inline bool newer(const Version& candidate,const Version& installed) {
     return candidate.preview.size()>installed.preview.size();
 }
 struct Package { std::string url,sha256; uint64_t size=0; };
-inline std::optional<Package> windowsPackage(const nlohmann::json& row,const std::string& tag) {
-    if(!row.contains("assets") || !row["assets"].is_array())return {};
-    static const std::regex namePattern(R"(^sattrak-[0-9A-Za-z.+-]+-windows-x64-setup\.exe$)");
+inline std::optional<Package> packageFor(const nlohmann::json& row,const std::string& tag,const std::string& platform) {
+    if(!version(tag) || !row.contains("assets") || !row["assets"].is_array())return {};
+    const std::string releaseVersion=tag.starts_with("v")?tag.substr(1):tag;
+    std::string wanted;
+    const bool windows=platform=="windows-x64";
+    if(platform=="macos-arm64" || platform=="macos-x64" || platform=="debian-amd64" || platform=="debian-arm64")
+        wanted="sattrak-"+releaseVersion+"-"+platform+".tar.gz";
+    else if(!windows)return {};
+    // Existing Windows preview installers use PROJECT_VERSION in their filename
+    // and a separate full release-version.txt marker. Preserve that convention.
+    static const std::regex windowsName(R"(^sattrak-[0-9A-Za-z.+-]+-windows-x64-setup\.exe$)");
     static const std::regex digestPattern("^sha256:[0-9a-f]{64}$");
     for(const auto& asset:row["assets"]) {
         if(!asset.is_object() || !asset.contains("name") || !asset["name"].is_string() ||
@@ -55,7 +63,8 @@ inline std::optional<Package> windowsPackage(const nlohmann::json& row,const std
            !asset.contains("size") || !asset["size"].is_number_unsigned() ||
            !asset.contains("browser_download_url") || !asset["browser_download_url"].is_string())continue;
         const auto name=asset["name"].get<std::string>(),digest=asset["digest"].get<std::string>();
-        if(!std::regex_match(name,namePattern) || !std::regex_match(digest,digestPattern))continue;
+        if(windows?!std::regex_match(name,windowsName):name!=wanted)continue;
+        if(!std::regex_match(digest,digestPattern))continue;
         const auto size=asset["size"].get<uint64_t>();if(size==0 || size>2ull*1024*1024*1024)continue;
         const auto url="https://github.com/ExplodingWater/sattrak/releases/download/"+tag+"/"+name;
         if(asset["browser_download_url"].get<std::string>()!=url)continue;
@@ -63,8 +72,26 @@ inline std::optional<Package> windowsPackage(const nlohmann::json& row,const std
     }
     return {};
 }
+inline std::optional<Package> windowsPackage(const nlohmann::json& row,const std::string& tag) {
+    return packageFor(row,tag,"windows-x64");
+}
+inline const char* buildPlatform() {
+#if defined(_WIN32) && (defined(_M_X64) || defined(__x86_64__))
+    return "windows-x64";
+#elif defined(__APPLE__) && defined(__aarch64__)
+    return "macos-arm64";
+#elif defined(__APPLE__) && defined(__x86_64__)
+    return "macos-x64";
+#elif defined(__linux__) && defined(__aarch64__)
+    return "debian-arm64";
+#elif defined(__linux__) && defined(__x86_64__)
+    return "debian-amd64";
+#else
+    return "";
+#endif
+}
 struct Release { std::string tag,url; std::optional<Package> package; };
-inline std::optional<Release> selectRelease(const std::string& body,const std::string& installed) {
+inline std::optional<Release> selectRelease(const std::string& body,const std::string& installed,const std::string& platform="windows-x64") {
     const auto current=version(installed);
     if(!current)throw std::runtime_error("Invalid build version");
     if(body.size()>2*1024*1024)throw std::runtime_error("Release response too large");
@@ -82,7 +109,7 @@ inline std::optional<Release> selectRelease(const std::string& body,const std::s
         if(!newer(*candidate,best))continue;
         best=*candidate;
         // Construct the trusted destination instead of opening API-supplied URLs
-        selected=Release{tag,"https://github.com/ExplodingWater/sattrak/releases/tag/"+tag,windowsPackage(row,tag)};
+        selected=Release{tag,"https://github.com/ExplodingWater/sattrak/releases/tag/"+tag,packageFor(row,tag,platform)};
     }
     return selected;
 }

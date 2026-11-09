@@ -1,6 +1,7 @@
 #include "gui/update_checker.hpp"
 #include "gui/update_release.hpp"
 #include "gui/auto_update_win.hpp"
+#include "gui/native_update.hpp"
 #include "imgui.h"
 #include <chrono>
 #include <thread>
@@ -11,6 +12,10 @@
 #include <winhttp.h>
 #else
 #include <curl/curl.h>
+#include <fstream>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/stat.h>
 #endif
 
 namespace gui {
@@ -79,6 +84,18 @@ void UpdateChecker::start() {
             }catch(...){}
         }
     }
+#else
+    {std::lock_guard lock(state->mutex);
+        if(!state->configured) {
+            state->configured=true;state->target=nativeupdate::installedFolder();
+            try {
+                int enabled=1;std::ifstream(nativeupdate::cacheFolder()/"automatic.txt")>>enabled;
+                state->automatic=enabled!=0;
+                std::ifstream result(nativeupdate::cacheFolder()/"result.txt");std::getline(result,state->detail);
+                if(state->detail.size()>200)state->detail.clear();
+            }catch(...){}
+        }
+    }
 #endif
     startWith(fetchReleases);
 }
@@ -89,7 +106,7 @@ void UpdateChecker::startWith(std::function<std::string()> fetch) {
         // Shared state lets shutdown proceed without waiting for a network timeout
         std::thread([shared,fetch=std::move(fetch)] {
             try {
-                const auto release=updates::selectRelease(fetch(),installedVersion());
+                const auto release=updates::selectRelease(fetch(),installedVersion(),updates::buildPlatform());
                 bool automatic=false;
                 {std::lock_guard lock(shared->mutex);
                     shared->status=release?Status::Available:Status::Current;
@@ -105,7 +122,7 @@ void UpdateChecker::startWith(std::function<std::string()> fetch) {
 }
 int UpdateChecker::commandLineCheck() {
     try {
-        const auto release=updates::selectRelease(fetchReleases(),installedVersion());
+        const auto release=updates::selectRelease(fetchReleases(),installedVersion(),updates::buildPlatform());
         std::cout<<"Installed "<<installedVersion()<<'\n';
         if(release)std::cout<<"Available "<<release->tag<<'\n'<<release->url<<'\n';
         else std::cout<<"No newer release found\n";
@@ -182,24 +199,76 @@ void UpdateChecker::download(const std::shared_ptr<State>& shared,const updates:
         shared->detail=shared->automatic?"Download or verification failed — use View release or retry":"Automatic installation is off";
     }
 #else
-    (void)package;
-    std::lock_guard lock(shared->mutex);shared->status=Status::Available;
+    std::filesystem::path partial;
+    try {
+        const auto cache=nativeupdate::cacheFolder();std::filesystem::create_directories(cache);
+        chmod(cache.c_str(),0700);
+        const auto destination=cache/(package.sha256+".tar.gz");
+        if(!nativeupdate::verify(destination,package.sha256,package.size)) {
+            partial=cache/(package.sha256+"-"+std::to_string(getpid())+"-"+
+                std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())+".part");
+            const int fd=open(partial.c_str(),O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW|O_CLOEXEC,0600);
+            if(fd<0)throw std::runtime_error("Cannot save download");
+            FILE* raw=fdopen(fd,"wb");if(!raw){close(fd);throw std::runtime_error("Cannot save download");}
+            auto file=std::unique_ptr<FILE,decltype(&fclose)>(raw,fclose);
+            static const auto initialized=curl_global_init(CURL_GLOBAL_DEFAULT);
+            if(initialized!=CURLE_OK)throw std::runtime_error("Network unavailable");
+            auto curl=std::unique_ptr<CURL,decltype(&curl_easy_cleanup)>(curl_easy_init(),curl_easy_cleanup);
+            if(!curl)throw std::runtime_error("Network unavailable");
+            struct Transfer { FILE* file;const std::shared_ptr<State>& state;uint64_t size,received=0; } transfer{file.get(),shared,package.size};
+            curl_easy_setopt(curl.get(),CURLOPT_URL,package.url.c_str());
+            curl_easy_setopt(curl.get(),CURLOPT_USERAGENT,"sattrak-updater");
+            curl_easy_setopt(curl.get(),CURLOPT_FOLLOWLOCATION,1L);
+            curl_easy_setopt(curl.get(),CURLOPT_MAXREDIRS,5L);
+#if LIBCURL_VERSION_NUM >= 0x075500
+            curl_easy_setopt(curl.get(),CURLOPT_PROTOCOLS_STR,"https");
+            curl_easy_setopt(curl.get(),CURLOPT_REDIR_PROTOCOLS_STR,"https");
+#else
+            curl_easy_setopt(curl.get(),CURLOPT_PROTOCOLS,CURLPROTO_HTTPS);
+            curl_easy_setopt(curl.get(),CURLOPT_REDIR_PROTOCOLS,CURLPROTO_HTTPS);
+#endif
+            curl_easy_setopt(curl.get(),CURLOPT_CONNECTTIMEOUT,10L);
+            curl_easy_setopt(curl.get(),CURLOPT_TIMEOUT,600L);
+            curl_easy_setopt(curl.get(),CURLOPT_LOW_SPEED_LIMIT,1024L);
+            curl_easy_setopt(curl.get(),CURLOPT_LOW_SPEED_TIME,30L);
+            curl_easy_setopt(curl.get(),CURLOPT_NOSIGNAL,1L);
+            curl_easy_setopt(curl.get(),CURLOPT_FAILONERROR,1L);
+            curl_easy_setopt(curl.get(),CURLOPT_WRITEDATA,&transfer);
+            curl_easy_setopt(curl.get(),CURLOPT_WRITEFUNCTION,+[](char* data,size_t size,size_t count,void* context)->size_t {
+                auto& t=*static_cast<Transfer*>(context);
+                if(size && count>(t.size-t.received)/size)return 0;
+                const size_t bytes=size*count;
+                {std::lock_guard lock(t.state->mutex);if(!t.state->automatic || t.state->closing)return 0;}
+                if(fwrite(data,1,bytes,t.file)!=bytes)return 0;
+                t.received+=bytes;
+                {std::lock_guard lock(t.state->mutex);t.state->received=t.received;}
+                return bytes;
+            });
+            if(curl_easy_perform(curl.get())!=CURLE_OK)throw std::runtime_error("Download interrupted");
+            long status=0;curl_easy_getinfo(curl.get(),CURLINFO_RESPONSE_CODE,&status);
+            if(status!=200 || fflush(file.get())!=0 || fsync(fd)!=0)throw std::runtime_error("Incomplete download");
+            file.reset();
+            if(!nativeupdate::verify(partial,package.sha256,package.size))throw std::runtime_error("Update verification failed");
+            std::filesystem::rename(partial,destination);partial.clear();
+        }
+        std::lock_guard lock(shared->mutex);shared->installer=destination;shared->received=package.size;shared->status=Status::Ready;
+    }catch(const std::exception& error) {
+        if(!partial.empty()){std::error_code ignored;std::filesystem::remove(partial,ignored);}
+        std::lock_guard lock(shared->mutex);shared->status=Status::Available;
+        shared->detail=std::string("Update not staged: ")+error.what();
+    }
 #endif
 }
 int UpdateChecker::downloadTest() {
-#ifdef _WIN32
     try {
-        const auto release=updates::selectRelease(fetchReleases(),"0.0.0-preview.0");
-        if(!release || !release->package)throw std::runtime_error("No verifiable Windows installer");
+        const auto release=updates::selectRelease(fetchReleases(),"0.0.0-preview.0",updates::buildPlatform());
+        if(!release || !release->package)throw std::runtime_error("No verifiable package for this platform");
         auto test=std::make_shared<State>();test->package=release->package;
         download(test,*release->package);
         if(test->status!=Status::Ready)throw std::runtime_error(test->detail);
         std::cout<<"Downloaded and verified "<<release->tag<<" without installing\n";
         return 0;
     }catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}
-#else
-    return 1;
-#endif
 }
 void UpdateChecker::installOnExit() {
 #ifdef _WIN32
@@ -222,7 +291,17 @@ void UpdateChecker::installOnExit() {
         try{std::ofstream(autoupdate::cacheFolder()/L"result.txt")<<"Update could not start — retry from App updates\n";}catch(...){}
     }
 #else
-    std::lock_guard lock(state->mutex);state->closing=true;
+    std::filesystem::path archive,target;std::optional<updates::Package> package;std::string tag;
+    {std::lock_guard lock(state->mutex);
+        state->closing=true;
+        if(!state->automatic || state->status!=Status::Ready || !state->package || state->target.empty())return;
+        archive=state->installer;target=state->target;package=state->package;tag=state->tag;
+    }
+    try {
+        nativeupdate::launchOnExit(target,archive,package->sha256,package->size,tag);
+    }catch(const std::exception& error) {
+        try{std::ofstream(nativeupdate::cacheFolder()/"result.txt")<<"Update could not start: "<<error.what()<<'\n';}catch(...){}
+    }
 #endif
 }
 void UpdateChecker::drawSettings() {
@@ -238,11 +317,17 @@ void UpdateChecker::drawSettings() {
         {std::lock_guard lock(state->mutex);state->automatic=automatic;}
 #ifdef _WIN32
         try{std::ofstream(autoupdate::cacheFolder()/L"automatic.txt")<<int(automatic);}catch(...){}
+#else
+        try{std::filesystem::create_directories(nativeupdate::cacheFolder());std::ofstream(nativeupdate::cacheFolder()/"automatic.txt")<<int(automatic);}catch(...){}
 #endif
         if(automatic)start();
     }
     ImGui::EndDisabled();
+#ifdef _WIN32
     if(!eligible)ImGui::TextWrapped("Automatic installation requires the installed Windows app");
+#else
+    if(!eligible)ImGui::TextWrapped("Automatic installation requires a managed per-user macOS or Debian install. Source builds and system packages update manually.");
+#endif
     if(status==Status::Ready && !automatic)ImGui::TextUnformatted("Automatic installation is off");
     if(status==Status::Downloading && total)ImGui::ProgressBar(float(double(received)/double(total)));
     if(!detail.empty())ImGui::TextWrapped("%s",detail.c_str());

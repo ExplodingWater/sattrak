@@ -23,20 +23,26 @@ endif()
 # Global Include Directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-# =======================================================================# Target 1: Satellite ADCS MEKF Executable
-# =======================================================================add_executable(mekf_adcs
+# ==============================================================================
+# Target 1: Satellite ADCS MEKF Executable
+# ==============================================================================
+add_executable(mekf_adcs
     src/adcs/main_adcs.cpp
 )
 target_include_directories(mekf_adcs PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-# =======================================================================# Target 2: Supersonic 2D Compressible CFD Solver Executable
-# =======================================================================add_executable(supersonic_cfd
+# ==============================================================================
+# Target 2: Supersonic 2D Compressible CFD Solver Executable
+# ==============================================================================
+add_executable(supersonic_cfd
     src/cfd/main_cfd.cpp
 )
 target_include_directories(supersonic_cfd PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-# =======================================================================# Target 3: ag.exe - Native 3D Simulation GUI
-# =======================================================================option(BUILD_GUI "Build the interactive OpenGL studio" ON)
+# ==============================================================================
+# Target 3: ag.exe - Native 3D Simulation GUI
+# ==============================================================================
+option(BUILD_GUI "Build the interactive OpenGL studio" ON)
 if(BUILD_GUI)
 find_package(OpenGL REQUIRED)
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
@@ -91,6 +97,21 @@ target_link_libraries(ag PRIVATE Threads::Threads)
 if(NOT WIN32)
     find_package(CURL REQUIRED)
     target_link_libraries(ag PRIVATE CURL::libcurl)
+    target_sources(ag PRIVATE src/gui/native_update.cpp)
+    add_custom_target(native_update_helper
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:ag>"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${PROJECT_SOURCE_DIR}/packaging/native/native_updater.py" "$<TARGET_FILE_DIR:ag>/native_updater.py")
+    add_dependencies(ag native_update_helper)
+    find_package(Python3 3.9 COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND AND (APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))
+        add_custom_target(native_package
+            COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/package_native.py"
+                --binary "$<TARGET_FILE:ag>" --source "${PROJECT_SOURCE_DIR}"
+                --version "${SATTRAK_RELEASE_VERSION}"
+                --output "${PROJECT_BINARY_DIR}/packages"
+            DEPENDS ag USES_TERMINAL VERBATIM)
+    endif()
 endif()
 
 target_include_directories(ag PRIVATE
@@ -134,9 +155,20 @@ if(WIN32)
 endif()
 endif()
 
-# =======================================================================# Automated Testing Suite (CTest)
-# =======================================================================include(CTest)
+# ==============================================================================
+# Automated Testing Suite (CTest)
+# ==============================================================================
+include(CTest)
 if(BUILD_TESTING)
+if(UNIX)
+    find_package(Python3 3.9 COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND)
+        add_executable(sattrak_native_updater_fixture tests/native_updater_fixture.cpp src/gui/native_update.cpp)
+        add_test(NAME Test_Native_Update COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/test_native_update.py")
+        set_tests_properties(Test_Native_Update PROPERTIES TIMEOUT 30
+            ENVIRONMENT "SATTRAK_NATIVE_FIXTURE=$<TARGET_FILE:sattrak_native_updater_fixture>")
+    endif()
+endif()
 add_executable(test_sky_catalog tests/test_sky_catalog.cpp src/gui/sky_catalog.cpp)
 add_test(NAME Test_Sky_Catalog COMMAND test_sky_catalog "${CMAKE_CURRENT_SOURCE_DIR}/assets/sky")
 

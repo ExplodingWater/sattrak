@@ -39,6 +39,27 @@ int main() {
     packaged["assets"][0]["digest"]="sha256:"+std::string(64,'a');
     packaged["assets"][0]["size"]=uint64_t(3ull*1024*1024*1024);
     check(!windowsPackage(packaged,"v1.1.0"),"Reject oversized package");
+    auto legacyPreview=entry("v1.0.0-preview.2",true);
+    legacyPreview["assets"]=nlohmann::json::array({{{"name","sattrak-1.0.0-windows-x64-setup.exe"},
+        {"state","uploaded"},{"size",uint64_t(100)},{"digest","sha256:"+std::string(64,'a')},
+        {"browser_download_url","https://github.com/ExplodingWater/sattrak/releases/download/v1.0.0-preview.2/sattrak-1.0.0-windows-x64-setup.exe"}}});
+    check(bool(windowsPackage(legacyPreview,"v1.0.0-preview.2")),"Preserve existing Windows preview installer naming");
+    for(const auto* platform:{"macos-arm64","macos-x64","debian-amd64","debian-arm64"}) {
+        auto native=entry("v1.1.0");
+        const auto name=std::string("sattrak-1.1.0-")+platform+".tar.gz";
+        const auto url="https://github.com/ExplodingWater/sattrak/releases/download/v1.1.0/"+name;
+        native["assets"]=nlohmann::json::array({{{"name",name},{"state","uploaded"},{"size",uint64_t(100)},
+            {"digest","sha256:"+std::string(64,'b')},{"browser_download_url",url}}});
+        auto selected=selectRelease(nlohmann::json::array({native}).dump(),"1.0.0",platform);
+        check(selected && selected->package && selected->package->url==url,"Select matching native architecture");
+        check(!packageFor(native,"v1.1.0","windows-x64"),"Never select native package for Windows");
+        check(!packageFor(native,"v1.1.0","unsupported"),"Unsupported platform is manual only");
+        native["assets"][0]["digest"]=nullptr;
+        check(!packageFor(native,"v1.1.0",platform),"Native digest is mandatory");
+        native["assets"][0]["digest"]="sha256:"+std::string(64,'b');
+        native["assets"][0]["name"]="sattrak-1.0.0-"+std::string(platform)+".tar.gz";
+        check(!packageFor(native,"v1.1.0",platform),"Package name must match selected release version");
+    }
     auto unpublished=entry("v5.0.0");unpublished["published_at"]=nullptr;
     check(!selectRelease(nlohmann::json::array({unpublished,entry("preview-2026-09-15-17233d5")}).dump(),"1.0.0"),"Skip unpublished and legacy tags");
     for(const auto& body:{std::string("not json"),std::string("{}"),std::string(2*1024*1024+1,' ')}) {

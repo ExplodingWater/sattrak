@@ -43,7 +43,7 @@ The night sky uses 5,044 catalog stars with J2000 positions, brightness and appr
 
 ## Get started
 
-sattrak checks GitHub for app updates at launch, downloads verified updates for the installed Windows app and installs them when you close it
+sattrak checks GitHub for app updates at launch. Registered Windows installations and managed per-user macOS/Debian installations download matching verified updates and apply them after you close the app.
 
 Retry through **Settings → General → App updates → Check now** — [update behavior and release versions](docs/APP_UPDATES.md)
 
@@ -57,7 +57,7 @@ Press **backtick (`)** for the command console. Use Up/Down to select suggestion
 
 Type `help` for available commands. You can adjust simulation speed, camera sensitivity and field of view, orbit altitude and inclination, master volume and UI scale. Suggestions appear as you type, and entering a value command without its argument shows its range and default. The console works while Settings and orbit replay are open.
 
-Music volume uses the same line-and-thumb bar as the song timeline; the adjacent
+Music volume uses a longer line-and-thumb bar like the song timeline; the adjacent
 numeric field still accepts an exact percentage. In the backtick console, use
 `volume 75` for 75%, or `audio.music 0.75` for the same setting. Both support
 0–200%; `volume` alone reports the current percentage. `audio.master 0.5`
@@ -120,7 +120,7 @@ Heating uses an approximate atmosphere and a Sutton–Graves heat-flux estimate.
 
 ## Build from source
 
-For native macOS and Debian/Kali setup, dependencies, launch commands and current platform limitations, see the [platform guide](docs/PLATFORM_GUIDE.md). Native `.dmg` and `.deb` packages are not available yet.
+For native macOS and Debian/Kali setup, dependencies, launch commands and current platform limitations, see the [platform guide](docs/PLATFORM_GUIDE.md). Native `.dmg` and `.deb` packages are not available yet. Managed per-user macOS and Debian archives support [automatic app updates](docs/APP_UPDATES.md#macos-and-debian-native-installations); source checkouts update manually.
 
 You need **CMake 3.20+**, a **C++20 compiler** and graphics drivers supporting **OpenGL 3.3**. On Windows, use Visual Studio's C++ build tools. On macOS, install the Xcode Command Line Tools and CMake.
 

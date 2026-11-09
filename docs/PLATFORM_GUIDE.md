@@ -1,6 +1,6 @@
 # Run sattrak on macOS or Debian/Kali
 
-Before native `.dmg` and `.deb` packages exist, build the C++ application on the target system. The Windows `ag.exe` and Windows setup program are not native Mac/Linux builds. Python is not required to build or run the GUI.
+Before native `.dmg` and `.deb` packages exist, build the C++ application on the target system or use a managed native archive when published. The Windows `ag.exe` and Windows setup program are not native Mac/Linux builds. Python is optional for source builds; managed native installations and auto-updates require Python 3.9+.
 
 Requirements: CMake 3.20 or newer, a C++20 compiler, Git, and a graphical desktop with OpenGL 3.3 support. Build in a directory your account owns. Do not run sattrak with `sudo`.
 
@@ -33,7 +33,7 @@ Use a maintained release with a C++20-capable compiler (for example GCC 12 or ne
 
 ```sh
 sudo apt update
-sudo apt install build-essential cmake git pkg-config xorg-dev libgl1-mesa-dev libasound2-dev libcurl4-openssl-dev
+sudo apt install build-essential cmake git pkg-config xorg-dev libgl1-mesa-dev libasound2-dev libcurl4-openssl-dev python3
 git clone --recurse-submodules https://github.com/ExplodingWater/sattrak.git
 cd sattrak
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_GUI=ON -DGLFW_BUILD_WAYLAND=OFF -DGLFW_BUILD_X11=ON
@@ -77,3 +77,13 @@ Run these from the build directory in a working graphical desktop session:
 The display check temporarily switches window/fullscreen modes and restores them. These commands also write screenshot captures beside the executable. CTest alone does not exercise the actual display/GPU/audio environment.
 
 Dependency references: [GLFW build dependencies and backend options](https://www.glfw.org/docs/latest/compile.html), [GLFW platform compatibility](https://www.glfw.org/docs/latest/compat.html), [Apple Command Line Tools](https://developer.apple.com/documentation/xcode/installing-the-command-line-tools), [Homebrew CMake](https://formulae.brew.sh/formula/cmake).
+
+## Managed native auto-updates
+
+Use `cmake --build build --target native_package` to prepare a versioned native
+archive. The [app update guide](APP_UPDATES.md#macos-and-debian-native-installations)
+covers first installation, Python 3.9+, asset naming, per-user data, session locks
+and the release workflow. These installations download matching verified releases
+and apply them after normal app exit. The app does not overwrite a source checkout,
+Homebrew installation or system `.deb` package. Native archives are terminal-launched;
+macOS signing/notarization and Finder bundles remain packaging work.

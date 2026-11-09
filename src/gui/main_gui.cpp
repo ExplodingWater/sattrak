@@ -26,6 +26,7 @@
 #include "gui/accessibility_panel.hpp"
 #include "gui/tutorial.hpp"
 #include "gui/update_checker.hpp"
+#include "gui/native_update.hpp"
 #include "../../tests/update_checks.hpp"
 #include "../../tests/tutorial_checks.hpp"
 #include "../../tests/accessibility_checks.hpp"
@@ -90,6 +91,18 @@ void applyStealthAerospaceTheme() {
 }
 
 int main(int argc, char** argv) {
+#ifndef _WIN32
+    if(argc>1 && std::strcmp(argv[1],"--native-install-info")==0) {
+        try {
+            gui::nativeupdate::configureRuntime();
+            const auto root=gui::nativeupdate::installedFolder();
+            std::cout<<"Platform: "<<gui::nativeupdate::platform()<<"\nManaged root: "
+                <<(root.empty()?"none (manual updates)":root.string())<<"\nWorking directory: "
+                <<std::filesystem::current_path().string()<<'\n';
+            return 0;
+        }catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}
+    }
+#endif
     if(argc>1 && std::strcmp(argv[1],"--check-updates")==0)return gui::UpdateChecker::commandLineCheck();
     if(argc>1 && std::strcmp(argv[1],"--download-update-test")==0)return gui::UpdateChecker::downloadTest();
     if(argc>1 && std::strcmp(argv[1],"--update-smoke-test")==0)return gui::UpdateChecks::run();
@@ -109,6 +122,10 @@ int main(int argc, char** argv) {
     const bool catalogSmoke = argc > 1 && std::strcmp(argv[1], "--catalog-smoke-test") == 0;
     const bool interfaceSmoke = argc > 1 && std::strcmp(argv[1], "--interface-smoke-test") == 0;
     const bool smokeTest = updateUiSmoke || tutorialSmoke || brandingCapture || interfaceSmoke || accessibilitySmoke || catalogSmoke || displaySmoke || consoleSmoke || startupSmoke || orbitSmoke || multiSmoke || modelSmoke || (argc > 1 && std::strcmp(argv[1], "--smoke-test") == 0);
+#ifndef _WIN32
+    try { gui::nativeupdate::configureRuntime(); }
+    catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}
+#endif
     if (!std::filesystem::exists("earth_texture.jpg")) {
         auto executableDir = std::filesystem::absolute(argv[0]).parent_path();
         if (std::filesystem::exists(executableDir / "earth_texture.jpg"))

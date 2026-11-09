@@ -1,0 +1,71 @@
+name: Native update packages
+
+# Build reviewable artifacts. Publishing a GitHub release remains a separate step.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Semantic version matching the intended release tag (without v)
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 -DSATTRAK_RELEASE_VERSION="$RELEASE_VERSION"
+      - name: Build and test
+        run: |
+          cmake --build build --parallel 3
+          ctest --test-dir build --output-on-failure
+      - name: Package
+        run: cmake --build build --target native_package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-macos-${{ runner.arch }}
+          path: build/packages/*
+          if-no-files-found: error
+  debian:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    # Build against Debian 12, not a newer Ubuntu glibc; archives target Debian 12+.
+    container: debian:12
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+    steps:
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y git ca-certificates build-essential cmake python3 libcurl4-openssl-dev libgl1-mesa-dev xorg-dev libasound2-dev passwd util-linux
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DGLFW_BUILD_WAYLAND=OFF -DSATTRAK_RELEASE_VERSION="$RELEASE_VERSION"
+      - name: Build and test
+        run: |
+          cmake --build build --parallel 3
+          useradd --create-home sattrak-test
+          chown -R sattrak-test:sattrak-test build
+          runuser -u sattrak-test -- ctest --test-dir build --output-on-failure
+      - name: Package
+        run: cmake --build build --target native_package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-debian-${{ runner.arch }}
+          path: build/packages/*
+          if-no-files-found: error
