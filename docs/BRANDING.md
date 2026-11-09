@@ -16,4 +16,4 @@ The identity uses a lowercase **sattrak** wordmark, the description **Explore Ea
 
 From the executable directory, run `ag.exe --capture-branding`. It renders five deterministic, paused camera/model views and writes `capture-3.ppm`, `capture-7.ppm`, `capture-11.ppm`, `capture-15.ppm` and `capture-19.ppm`. Frames 3/7/11/15 supply the Earth/Landsat/Hubble/ISS images. The mode hides the ImGui overlay during framebuffer export and exits automatically. The resulting images remain genuine application renders.
 
-The branded Windows wizard is built from `packaging/windows/sattrak.iss`; see [the installer guide](INSTALLER_PLAN.md).
+The branded Windows wizard is built from `packaging/windows/sattrak.iss`; see [the installer guide](INSTALLER_PLAN.md)

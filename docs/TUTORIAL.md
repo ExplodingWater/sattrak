@@ -1,6 +1,7 @@
 # Explore sattrak
 
-[Download the Windows installer](https://github.com/ExplodingWater/sattrak/releases/download/v1.0.0-preview.20261103/sattrak-1.0.0-windows-x64-setup.exe) · [Release details](https://github.com/ExplodingWater/sattrak/releases/tag/v1.0.0-preview.20261103)
+- [Download the Windows installer](https://github.com/ExplodingWater/sattrak/releases/download/v1.0.0-preview.20261103/sattrak-1.0.0-windows-x64-setup.exe)
+- [Release details](https://github.com/ExplodingWater/sattrak/releases/tag/v1.0.0-preview.20261103)
 
 The guided tutorial starts on your first launch, after the satellite-data choice. Restart it from **Settings → General → Restart guided tutorial**.
 
@@ -24,7 +25,7 @@ Open the flight director to pause time, choose a camera or select a ground targe
 
 ![Orbit import and recording window](images/tutorial-orbits.png)
 
-Orbit replay imports Earth-centered CSV or OEM trajectories. CSV needs UTC timestamps, a reference frame, position in kilometres and velocity in kilometres per second. [Read the format guide and error-handling notes](../assets/orbits/README.md).
+Orbit replay imports Earth-centered CSV or OEM trajectories. CSV needs UTC timestamps, a reference frame, position in kilometres and velocity in kilometres per second. [Read the format guide and error-handling notes](../assets/orbits/README.md)
 
 Use **Record path**, **Stop recording**, then **Save** or **Save As** to retain a simulated path. Save before starting another recording or exiting. Comparison trajectories and ground-station pass calculations are also in this window.
 

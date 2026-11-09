@@ -9,4 +9,4 @@ Official Lucide SVGs downloaded October 24, 2026:
 
 The native player reproduces these SVG paths in `include/gui/music_icons.hpp`, including their rounded corners and stroke caps. Paths are rendered directly by ImGui at the current interface scale and text color; no network connection is needed at runtime.
 
-The original SVGs and complete upstream LICENSE are included here. See https://lucide.dev/license.
+The original SVGs and complete upstream LICENSE are included here. See https://lucide.dev/license

@@ -16,4 +16,4 @@ pixel; close surface views therefore cannot show street-level detail.
 The renderer supplies its own lighting and atmosphere.
 
 NASA imagery is credited separately from the project's MIT-licensed code.
-See [NASA media usage guidelines](https://www.nasa.gov/nasa-brand-center/images-and-media/).
+See [NASA media usage guidelines](https://www.nasa.gov/nasa-brand-center/images-and-media/)

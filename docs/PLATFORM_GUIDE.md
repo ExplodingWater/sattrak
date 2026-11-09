@@ -76,7 +76,7 @@ Run these from the build directory in a working graphical desktop session:
 
 The display check temporarily switches window/fullscreen modes and restores them. These commands also write screenshot captures beside the executable. CTest alone does not exercise the actual display/GPU/audio environment.
 
-Dependency references: [GLFW build dependencies and backend options](https://www.glfw.org/docs/latest/compile.html), [GLFW platform compatibility](https://www.glfw.org/docs/latest/compat.html), [Apple Command Line Tools](https://developer.apple.com/documentation/xcode/installing-the-command-line-tools), [Homebrew CMake](https://formulae.brew.sh/formula/cmake).
+Dependency references: [GLFW build dependencies and backend options](https://www.glfw.org/docs/latest/compile.html), [GLFW platform compatibility](https://www.glfw.org/docs/latest/compat.html), [Apple Command Line Tools](https://developer.apple.com/documentation/xcode/installing-the-command-line-tools), [Homebrew CMake](https://formulae.brew.sh/formula/cmake)
 
 ## Managed native auto-updates
 
@@ -86,4 +86,4 @@ covers first installation, Python 3.9+, asset naming, per-user data, session loc
 and the release workflow. These installations download matching verified releases
 and apply them after normal app exit. The app does not overwrite a source checkout,
 Homebrew installation or system-owned package files. The official `.app` and `.deb`
-launchers initialize that same per-user layout; see [installers](INSTALLERS.md).
+launchers initialize that same per-user layout; see [installers](INSTALLERS.md)

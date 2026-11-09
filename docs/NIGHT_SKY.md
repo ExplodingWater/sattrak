@@ -32,7 +32,7 @@ corrections, atmospheric refraction, daylight extinction or light pollution.
 It is a catalog-based visualization rather than a precision planetarium.
 The existing illustrative Sun direction is independent of this sky model.
 
-See [asset provenance and licensing](../assets/sky/CREDITS.md).
+See [asset provenance and licensing](../assets/sky/CREDITS.md)
 
 Validation:
 

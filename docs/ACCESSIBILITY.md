@@ -48,7 +48,7 @@ plot, image, rendered scene, transparency override or disabled state.
 Design references: [W3C contrast guidance](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum),
 [non-text contrast](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast),
 [keyboard access](https://www.w3.org/WAI/WCAG22/Understanding/keyboard), and
-[text alternatives](https://www.w3.org/WAI/WCAG22/Understanding/non-text-content).
+[text alternatives](https://www.w3.org/WAI/WCAG22/Understanding/non-text-content)
 
 ## Remaining gaps
 

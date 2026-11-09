@@ -7,7 +7,7 @@ The upstream BSD 3-Clause notice is reproduced in `LICENSE-d3-celestial.txt`.
 - `stars.txt`: 5,044 entries from `data/stars.6.json`. Hipparcos IDs, J2000
   right ascension/declination in degrees, apparent visual magnitude and B-V.
   Upstream source: **XHIP: An Extended Hipparcos Compilation**, Anderson &
-  Francis (2012), [VizieR V/137D](https://cdsarc.cds.unistra.fr/viz-bin/cat/V/137D).
+  Francis (2012), [VizieR V/137D](https://cdsarc.cds.unistra.fr/viz-bin/cat/V/137D)
 - `lines.txt`: 743 segments converted from `data/constellations.lines.json`.
 - `labels.txt`: 89 label positions from `data/constellations.json`, covering
   all 88 constellation identifiers; Serpens has Caput and Cauda labels.

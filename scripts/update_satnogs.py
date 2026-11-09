@@ -23,6 +23,9 @@ def main():
             with urllib.request.urlopen(urllib.request.Request(url,headers={'User-Agent':'sattrak'}),timeout=60) as r:rows=json.load(r)
         if not isinstance(rows,list):raise ValueError('Expected complete array from '+url)
         data=[{key:row.get(key) for key in fields} for row in rows]
+        if name=='stations':
+            for row in data:
+                if isinstance(row.get('name'),str):row['name']=row['name'].replace('\u00b7','')
         (args.output/(name+'.json')).write_text(json.dumps(data,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
         print(name,len(data))
     (args.output/'downloaded.txt').write_text(datetime.datetime.now(datetime.timezone.utc).isoformat())

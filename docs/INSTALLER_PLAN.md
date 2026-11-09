@@ -1,6 +1,6 @@
 # Windows installation wizard
 
-The Windows wizard is implemented in [packaging/windows/sattrak.iss](../packaging/windows/sattrak.iss), with captured application artwork, shortcuts, uninstall support, and a CMake `windows_installer` build target. See the [build and verification guide](../packaging/windows/README.md).
+The Windows wizard is implemented in [packaging/windows/sattrak.iss](../packaging/windows/sattrak.iss), with captured application artwork, shortcuts, uninstall support, and a CMake `windows_installer` build target. See the [build and verification guide](../packaging/windows/README.md)
 
 ## Packaging prerequisites
 
@@ -16,4 +16,4 @@ The per-user wizard provides a welcome screen, license and terms, install locati
 
 Verify paths with spaces and non-ASCII characters, first launch, offline launch, upgrade, uninstall, and reinstall. Preserve user preferences and recordings during upgrades and uninstall unless the user explicitly requests their removal. Test bundled-resource discovery when launching from a shortcut or a different working directory. Sign release binaries and the installer before public distribution when signing credentials are available.
 
-The CMake target stages the runtime payload and detected release MSVC DLLs, then compiles the setup executable under `build/installer`. Uninstall preserves user-created recordings and preferences. The setup executable is unsigned; clean-system and upgrade validation remain required before public release. Artwork provenance is documented in [BRANDING.md](BRANDING.md).
+The CMake target stages the runtime payload and detected release MSVC DLLs, then compiles the setup executable under `build/installer`. Uninstall preserves user-created recordings and preferences. The setup executable is unsigned; clean-system and upgrade validation remain required before public release. Artwork provenance is documented in [BRANDING.md](BRANDING.md)

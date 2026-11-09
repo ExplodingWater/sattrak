@@ -2,7 +2,16 @@
 
 # sattrak
 
-**[Download for Windows](https://github.com/ExplodingWater/sattrak/releases/download/v1.0.0-preview.20261103/sattrak-1.0.0-windows-x64-setup.exe)** · [Release notes](https://github.com/ExplodingWater/sattrak/releases/tag/v1.0.0-preview.20261103) · [Screenshot tutorial](docs/TUTORIAL.md)
+- **[Download for Windows](https://github.com/ExplodingWater/sattrak/releases/download/v1.0.0-preview.20261103/sattrak-1.0.0-windows-x64-setup.exe)**
+- **[Download for macOS: Apple Silicon](https://github.com/ExplodingWater/sattrak/actions/runs/42683103935/artifacts/13702319382)**
+- **[Download for macOS: Intel](https://github.com/ExplodingWater/sattrak/actions/runs/42683103935/artifacts/13703494444)**
+- **[Download for Debian: amd64](https://github.com/ExplodingWater/sattrak/actions/runs/42683103935/artifacts/13704410335)**
+- **[Download for Debian: arm64](https://github.com/ExplodingWater/sattrak/actions/runs/42683103935/artifacts/13703493429)**
+- [Windows release notes](https://github.com/ExplodingWater/sattrak/releases/tag/v1.0.0-preview.20261103)
+- [macOS and Debian build details](https://github.com/ExplodingWater/sattrak/actions/runs/42683103935)
+- [Screenshot tutorial](docs/TUTORIAL.md)
+
+macOS and Debian downloads are preview-build ZIPs and require GitHub sign-in. Open the `installers/` folder inside the ZIP for the DMG/PKG or DEB installer. These artifacts expire on 7 February 2027; permanent release downloads have not been published yet. Mac previews are development-signed and not notarized. See the [installation guide](docs/INSTALLERS.md)
 
 The Windows preview includes the branded installation wizard, bundled models and offline satellite catalog. Install for your Windows account, then follow the guided first-run tutorial. Restart it any time from **Settings → General → Restart guided tutorial**.
 
@@ -15,7 +24,7 @@ Built by **Martin Hafizi ([ExplodingWater](https://github.com/ExplodingWater))**
   <img src="docs/images/sattrak-iss.png" alt="The ISS above Earth's horizon, captured in sattrak" width="49%">
 </p>
 
-All imagery above comes from sattrak's own renderer. See [branding and capture notes](docs/BRANDING.md).
+All imagery above comes from sattrak's own renderer. See [branding and capture notes](docs/BRANDING.md)
 
 ## Learn the interface
 
@@ -39,7 +48,7 @@ The 22-step walkthrough opens and spotlights each main part of the UI. Use **< c
 
 Optional music and recorded amateur-radio communications accompany the view. Their volume and playback can be controlled independently. The app works offline; optional internet updates refresh the satellite catalog used for orbit predictions.
 
-The night sky uses 5,044 catalog stars with J2000 positions, brightness and approximate colors. Enable constellation lines and names under **Settings → Video → Night sky**. See [sky controls and accuracy limits](docs/NIGHT_SKY.md).
+The night sky uses 5,044 catalog stars with J2000 positions, brightness and approximate colors. Enable constellation lines and names under **Settings → Video → Night sky**. See [sky controls and accuracy limits](docs/NIGHT_SKY.md)
 
 ## Get started
 
@@ -105,7 +114,7 @@ Camera shortcuts are suspended during keyboard navigation and editing.
 Music buttons have visible text labels; station cards and plots have accompanying
 descriptions. The default theme uses opaque surfaces and stronger contrast.
 This is an initial accessibility pass, not full native screen-reader support.
-See [accessibility features and remaining gaps](docs/ACCESSIBILITY.md).
+See [accessibility features and remaining gaps](docs/ACCESSIBILITY.md)
 
 The [draft Terms of Use](TERMS.md) cover the current free MIT-licensed release and
 preserve the rights in [LICENSE](LICENSE). They are available in Help and included
@@ -149,4 +158,4 @@ The project also includes standalone attitude-control and airflow programs, `mek
 
 ## Credits and license
 
-sattrak's source code is licensed under [MIT](LICENSE). Spacecraft models, imagery, music, radio recordings and third-party libraries retain their own terms and credits. Asset credits are included under `assets/`, including [Earth imagery](assets/earth/CREDITS.md), [ground-station photographs](assets/stations/CREDITS.md), [CelesTrak satellite data](assets/catalog/CREDITS.md), [SatNOGS data](assets/satnogs/CREDITS.md), [music](assets/music/CREDITS.md) and [radio recordings](assets/radio/CREDITS.md).
+sattrak's source code is licensed under [MIT](LICENSE). Spacecraft models, imagery, music, radio recordings and third-party libraries retain their own terms and credits. Asset credits are included under `assets/`, including [Earth imagery](assets/earth/CREDITS.md), [ground-station photographs](assets/stations/CREDITS.md), [CelesTrak satellite data](assets/catalog/CREDITS.md), [SatNOGS data](assets/satnogs/CREDITS.md), [music](assets/music/CREDITS.md) and [radio recordings](assets/radio/CREDITS.md)

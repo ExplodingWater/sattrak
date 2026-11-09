@@ -76,7 +76,7 @@ app closes. It never rewrites `/Applications/sattrak.app`, `/usr/bin/sattrak`, o
 other dpkg-managed files. Python 3.9+ on PATH is needed for that helper; the native
 Mac app itself launches without Python. Debian installs Python as a dependency.
 Keep the matching `.tar.gz` update archives on each GitHub release as well as the
-initial `.dmg`/`.pkg`/`.deb` installers. See [app updates](APP_UPDATES.md).
+initial `.dmg`/`.pkg`/`.deb` installers. See [app updates](APP_UPDATES.md)
 
 Preferences/recordings from an older source checkout stay in its existing launch
 folder. To migrate them, close all sessions and copy the desired settings and
