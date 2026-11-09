@@ -5,6 +5,7 @@ import hashlib
 import importlib.util
 import io
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import struct
@@ -231,6 +232,73 @@ class NativeUpdateTests(unittest.TestCase):
         fixture.write_bytes(b'\xca\xfe\xba\xbe' + bytes(60))
         with self.assertRaisesRegex(ValueError, 'single-architecture'):
             updater.binary_platform(fixture)
+
+    def desktop_launcher(self, release='1.0.0'):
+        fixture = Path(os.environ['SATTRAK_NATIVE_FIXTURE'])
+        binary = Path(os.environ['SATTRAK_BOOTSTRAP_LAUNCHER'])
+        self.platform = updater.binary_platform(binary)
+        if self.platform.startswith('macos-'):
+            prefix = self.base / 'Desktop App.app/Contents'
+            launcher = prefix / 'MacOS/sattrak'
+            payload = prefix / 'Resources/payload'
+        else:
+            prefix = self.base / 'desktop-prefix'
+            launcher = prefix / 'bin/sattrak'
+            payload = prefix / 'lib/sattrak/payload'
+        launcher.parent.mkdir(parents=True)
+        shutil.copy2(binary, launcher)
+        payload.mkdir(parents=True)
+        archive, digest, size = self.package(release, binary=fixture)
+        with mock.patch.object(updater, 'platform_id', return_value=self.platform):
+            with updater.verified_archive(archive, digest, size) as verified:
+                updater.unpack(verified, payload)
+        env = dict(os.environ, SATTRAK_USER_INSTALL_ROOT=str(self.root), SATTRAK_SUPPRESS_LAUNCH_ALERTS='1')
+        return launcher, payload, env
+
+    @unittest.skipUnless(os.environ.get('SATTRAK_BOOTSTRAP_LAUNCHER'), 'Requires the native desktop launcher')
+    @unittest.skipIf(os.geteuid() == 0, 'The launcher deliberately rejects root')
+    def test_desktop_launcher_bootstrap_updates_and_keeps_state(self):
+        launcher, payload, env = self.desktop_launcher()
+        def launch(*arguments):
+            result = subprocess.run([launcher, *arguments], env=env, capture_output=True, text=True, timeout=8)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            return result
+        launch()
+        self.assertEqual(self.current(), '1.0.0')
+        local = self.root / 'user-data/local'
+        local.mkdir()
+        (local / 'settings.txt').write_text('volume=75')
+        fixture = Path(os.environ['SATTRAK_NATIVE_FIXTURE'])
+        archive, digest, size = self.staged(binary=fixture)
+        launch('--schedule', str(archive), digest, str(size), 'v1.0.1')
+        import time
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline and self.current() != '1.0.1':
+            time.sleep(0.05)
+        self.assertEqual(self.current(), '1.0.1', 'Inherited launcher lock must not block the update helper')
+        launch()
+        self.assertEqual(self.current(), '1.0.1', 'Old desktop installer must not downgrade an updated app')
+        (payload / 'release-version.txt').write_text('2.0.0\n')
+        # An open session postpones a newer bootstrap, without blocking launch.
+        with updater.installation_lock(self.root, exclusive=False):
+            launch()
+            self.assertEqual(self.current(), '1.0.1')
+        launch()
+        self.assertEqual(self.current(), '2.0.0')
+        self.assertEqual((local / 'settings.txt').read_text(), 'volume=75')
+
+    @unittest.skipUnless(os.environ.get('SATTRAK_BOOTSTRAP_LAUNCHER'), 'Requires the native desktop launcher')
+    @unittest.skipIf(os.geteuid() == 0, 'The launcher deliberately rejects root')
+    def test_desktop_launcher_refuses_unmanaged_folder(self):
+        launcher, payload, env = self.desktop_launcher()
+        self.root.mkdir(parents=True)
+        user_file = self.root / 'notes.txt'
+        user_file.write_text('keep this')
+        result = subprocess.run([launcher], env=env, capture_output=True, text=True, timeout=5)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('unmanaged user folder', result.stderr)
+        self.assertEqual(user_file.read_text(), 'keep this')
+        self.assertFalse((self.root / 'install.json').exists())
 
     @unittest.skipUnless(os.environ.get('SATTRAK_NATIVE_FIXTURE'), 'Run through CTest to include the C++ fixture')
     @unittest.skipIf(os.geteuid() == 0, 'Native runtime deliberately rejects root installations')

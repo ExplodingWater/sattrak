@@ -1,6 +1,6 @@
 # Run sattrak on macOS or Debian/Kali
 
-Before native `.dmg` and `.deb` packages exist, build the C++ application on the target system or use a managed native archive when published. The Windows `ag.exe` and Windows setup program are not native Mac/Linux builds. Python is optional for source builds; managed native installations and auto-updates require Python 3.9+.
+Build the C++ application on the target system, or use a native installer when published. See the [macOS and Debian installer guide](INSTALLERS.md). The Windows `ag.exe` and Windows setup program are not native Mac/Linux builds. Python is optional for source builds; managed native installations and auto-updates require Python 3.9+.
 
 Requirements: CMake 3.20 or newer, a C++20 compiler, Git, and a graphical desktop with OpenGL 3.3 support. Build in a directory your account owns. Do not run sattrak with `sudo`.
 
@@ -25,7 +25,7 @@ cd build
 ./ag
 ```
 
-This produces a command-line-launched native executable, not a Finder `.app` bundle yet. The source already requests a forward-compatible OpenGL core context on macOS and links Apple's audio frameworks. A universal app bundle, signing/notarization and a `.dmg` remain packaging work; native desktop behavior still needs validation on real Macs.
+The default build produces a command-line executable. `cmake --build build --target macos_installer` also creates a Finder `.app`, `.dmg` and `.pkg`. The source already requests a forward-compatible OpenGL core context on macOS and links Apple's audio frameworks. The installers are architecture-specific; Developer ID signing/notarization require your release credentials, and native desktop behavior still needs validation on real Macs.
 
 ## Debian, Kali, Ubuntu and related distributions
 
@@ -49,7 +49,7 @@ In a VM, enable the guest's supported 3D acceleration and graphics drivers. If O
 
 ## Assets, preferences and existing clones
 
-CMake copies `assets/`, `earth_texture.jpg`, `LICENSE` and `TERMS.md` beside the executable. Keep them together. Launching from `build` as above puts the existing relative preferences and recordings in that writable directory. Do not copy only `ag` to `/usr/bin`; a future `.deb` needs proper read-only asset paths and per-user writable state.
+CMake copies `assets/`, `earth_texture.jpg`, `LICENSE` and `TERMS.md` beside the executable. Keep them together. Launching from `build` as above puts the existing relative preferences and recordings in that writable directory. Do not copy only `ag` to `/usr/bin`. The `debian_installer` target packages a native launcher, read-only bootstrap assets and separate per-user writable state.
 
 For an existing clone, run `git submodule update --init --recursive` before configuring. Use separate build directories for each OS/architecture; never reuse a Windows CMake cache on macOS/Linux. A failed parallel build caused by low memory can be retried with `cmake --build build --parallel 2`.
 
@@ -85,5 +85,5 @@ archive. The [app update guide](APP_UPDATES.md#macos-and-debian-native-installat
 covers first installation, Python 3.9+, asset naming, per-user data, session locks
 and the release workflow. These installations download matching verified releases
 and apply them after normal app exit. The app does not overwrite a source checkout,
-Homebrew installation or system `.deb` package. Native archives are terminal-launched;
-macOS signing/notarization and Finder bundles remain packaging work.
+Homebrew installation or system-owned package files. The official `.app` and `.deb`
+launchers initialize that same per-user layout; see [installers](INSTALLERS.md).

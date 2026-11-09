@@ -120,7 +120,7 @@ Heating uses an approximate atmosphere and a Sutton–Graves heat-flux estimate.
 
 ## Build from source
 
-For native macOS and Debian/Kali setup, dependencies, launch commands and current platform limitations, see the [platform guide](docs/PLATFORM_GUIDE.md). Native `.dmg` and `.deb` packages are not available yet. Managed per-user macOS and Debian archives support [automatic app updates](docs/APP_UPDATES.md#macos-and-debian-native-installations); source checkouts update manually.
+For native macOS and Debian/Kali setup, dependencies, launch commands and current platform limitations, see the [platform guide](docs/PLATFORM_GUIDE.md). Native `.dmg`/`.pkg` and Debian `.deb` installers can be built with the [installer targets](docs/INSTALLERS.md). Their per-user installations support [automatic app updates](docs/APP_UPDATES.md#macos-and-debian-native-installations); source checkouts update manually.
 
 You need **CMake 3.20+**, a **C++20 compiler** and graphics drivers supporting **OpenGL 3.3**. On Windows, use Visual Studio's C++ build tools. On macOS, install the Xcode Command Line Tools and CMake.
 

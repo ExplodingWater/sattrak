@@ -2,6 +2,7 @@
 #ifndef _WIN32
 #include "gui/update_release.hpp"
 #include <cerrno>
+#include <charconv>
 #include <cstdlib>
 #include <fstream>
 #include <stdexcept>
@@ -74,6 +75,16 @@ void configureRuntime() {
         if(installedFolder()!=root)throw std::runtime_error("Installation updated; start sattrak using its launcher");
     }
     fs::current_path(root/"user-data");
+    if(const auto* inherited=std::getenv("SATTRAK_NATIVE_SESSION_FD")) {
+        int fd=-1;const std::string value=inherited;
+        const auto parsed=std::from_chars(value.data(),value.data()+value.size(),fd);
+        struct stat inheritedInfo{},lockInfo{};
+        if(parsed.ec==std::errc{} && parsed.ptr==value.data()+value.size() && fd>=3 &&
+            fstat(fd,&inheritedInfo)==0 && stat((root/"session.lock").c_str(),&lockInfo)==0 &&
+            inheritedInfo.st_dev==lockInfo.st_dev && inheritedInfo.st_ino==lockInfo.st_ino)
+            if(fcntl(fd,F_SETFD,FD_CLOEXEC)<0)throw std::runtime_error("Cannot protect the inherited session lock");
+        unsetenv("SATTRAK_NATIVE_SESSION_FD");
+    }
 }
 namespace {
 int helper(const std::vector<std::string>& arguments,bool wait,const fs::path& log={}) {

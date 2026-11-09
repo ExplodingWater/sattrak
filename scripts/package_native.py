@@ -9,6 +9,44 @@ import tarfile
 import tempfile
 
 
+def load_updater(source):
+    spec = importlib.util.spec_from_file_location('native_updater', source / 'packaging/native/native_updater.py')
+    updater = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(updater)
+    return updater
+
+
+def stage_payload(binary, source, version, destination):
+    updater = load_updater(source)
+    updater.version(version)
+    if version.startswith('v'):
+        raise ValueError('Use a release version without a leading v')
+    native_platform = updater.binary_platform(binary)
+    destination.mkdir(parents=True)
+    shutil.copy2(binary, destination / 'ag')
+    shutil.copy2(source / 'packaging/native/native_updater.py', destination / 'native_updater.py')
+    for name in ('earth_texture.jpg', 'LICENSE', 'TERMS.md'):
+        shutil.copy2(source / name, destination / name)
+    shutil.copytree(source / 'assets', destination / 'assets')
+    notices = destination / 'assets/third-party-licenses'
+    notices.mkdir(exist_ok=True)
+    for library, name in (('glfw', 'LICENSE.md'), ('imgui', 'LICENSE.txt'), ('implot', 'LICENSE'),
+                          ('miniaudio', 'LICENSE'), ('sgp4', 'LICENSE'), ('nlohmann', 'LICENSE.MIT')):
+        shutil.copy2(source / 'external' / library / name, notices / (library + '-' + name))
+    (destination / 'release-version.txt').write_text(version + '\n')
+    (destination / 'platform.txt').write_text(native_platform + '\n')
+    return native_platform
+
+
+def checksum(path):
+    digest = hashlib.sha256()
+    with path.open('rb') as source:
+        for block in iter(lambda: source.read(1024 * 1024), b''):
+            digest.update(block)
+    path.with_name(path.name + '.sha256').write_text(digest.hexdigest() + '  ' + path.name + '\n')
+    return digest.hexdigest()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--binary', type=Path, required=True)
@@ -18,9 +56,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     helper = args.source / 'packaging/native/native_updater.py'
-    spec = importlib.util.spec_from_file_location('native_updater', helper)
-    updater = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(updater)
+    updater = load_updater(args.source)
     updater.version(args.version)
     if args.version.startswith('v'):
         parser.error('Use a version without a leading v; release tags may include v')
@@ -32,14 +68,7 @@ def main():
     destination = args.output / f'sattrak-{args.version}-{args.platform}.tar.gz'
     with tempfile.TemporaryDirectory(prefix='sattrak-package-') as temporary:
         stage = Path(temporary) / 'sattrak'
-        stage.mkdir()
-        shutil.copy2(args.binary, stage / 'ag')
-        shutil.copy2(helper, stage / 'native_updater.py')
-        for name in ('earth_texture.jpg', 'LICENSE', 'TERMS.md'):
-            shutil.copy2(args.source / name, stage / name)
-        shutil.copytree(args.source / 'assets', stage / 'assets')
-        (stage / 'release-version.txt').write_text(args.version + '\n')
-        (stage / 'platform.txt').write_text(args.platform + '\n')
+        stage_payload(args.binary, args.source, args.version, stage)
         # Avoid links / special files, private paths and host ownership metadata.
         def metadata(info):
             if not (info.isfile() or info.isdir()):
@@ -50,11 +79,7 @@ def main():
             return info
         with tarfile.open(destination, 'w:gz', compresslevel=6) as archive:
             archive.add(stage, arcname='sattrak', filter=metadata)
-    digest = hashlib.sha256()
-    with destination.open('rb') as source:
-        for block in iter(lambda: source.read(1024 * 1024), b''):
-            digest.update(block)
-    destination.with_name(destination.name + '.sha256').write_text(digest.hexdigest() + '  ' + destination.name + '\n')
+    checksum(destination)
     # Bootstrap helper is also a release artifact for the first installation.
     shutil.copy2(helper, args.output / 'native_updater.py')
     print(destination)

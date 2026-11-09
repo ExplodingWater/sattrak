@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
 project(sattrak VERSION 1.0.0 LANGUAGES C CXX DESCRIPTION "Spacecraft Dynamics and Supersonic CFD Simulation")
+if(APPLE)
+    enable_language(OBJCXX)
+endif()
 set(SATTRAK_RELEASE_VERSION "1.0.0-preview.20261103" CACHE STRING "Release tag version used by the update checker")
 if(NOT SATTRAK_RELEASE_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+[-+A-Za-z0-9.]*$")
     message(FATAL_ERROR "SATTRAK_RELEASE_VERSION must be a semantic release version")
@@ -98,6 +101,13 @@ if(NOT WIN32)
     find_package(CURL REQUIRED)
     target_link_libraries(ag PRIVATE CURL::libcurl)
     target_sources(ag PRIVATE src/gui/native_update.cpp)
+    add_executable(sattrak_launcher packaging/native/launcher.cpp src/gui/native_update.cpp)
+    if(APPLE)
+        target_sources(ag PRIVATE src/gui/platform_application.mm)
+        set_source_files_properties(src/gui/platform_application.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+        target_link_libraries(ag PRIVATE "-framework Cocoa")
+        target_link_libraries(sattrak_launcher PRIVATE "-framework CoreFoundation")
+    endif()
     add_custom_target(native_update_helper
         COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:ag>"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -111,6 +121,25 @@ if(NOT WIN32)
                 --version "${SATTRAK_RELEASE_VERSION}"
                 --output "${PROJECT_BINARY_DIR}/packages"
             DEPENDS ag USES_TERMINAL VERBATIM)
+        if(APPLE)
+            set(SATTRAK_APP_SIGNING_IDENTITY "-" CACHE STRING "Developer ID Application identity; - means ad hoc")
+            set(SATTRAK_INSTALLER_SIGNING_IDENTITY "" CACHE STRING "Developer ID Installer identity; empty means unsigned")
+            add_custom_target(macos_installer
+                COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/package_installers.py"
+                    --binary "$<TARGET_FILE:ag>" --launcher "$<TARGET_FILE:sattrak_launcher>"
+                    --source "${PROJECT_SOURCE_DIR}" --version "${SATTRAK_RELEASE_VERSION}"
+                    --output "${PROJECT_BINARY_DIR}/installers" --format macos
+                    --app-signing-identity "${SATTRAK_APP_SIGNING_IDENTITY}"
+                    --installer-signing-identity "${SATTRAK_INSTALLER_SIGNING_IDENTITY}"
+                DEPENDS ag sattrak_launcher USES_TERMINAL VERBATIM)
+        else()
+            add_custom_target(debian_installer
+                COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/package_installers.py"
+                    --binary "$<TARGET_FILE:ag>" --launcher "$<TARGET_FILE:sattrak_launcher>"
+                    --source "${PROJECT_SOURCE_DIR}" --version "${SATTRAK_RELEASE_VERSION}"
+                    --output "${PROJECT_BINARY_DIR}/installers" --format debian
+                DEPENDS ag sattrak_launcher USES_TERMINAL VERBATIM)
+        endif()
     endif()
 endif()
 
@@ -167,6 +196,11 @@ if(UNIX)
         add_test(NAME Test_Native_Update COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/test_native_update.py")
         set_tests_properties(Test_Native_Update PROPERTIES TIMEOUT 30
             ENVIRONMENT "SATTRAK_NATIVE_FIXTURE=$<TARGET_FILE:sattrak_native_updater_fixture>")
+        if(TARGET sattrak_launcher)
+            set_property(TEST Test_Native_Update APPEND PROPERTY ENVIRONMENT
+                "SATTRAK_BOOTSTRAP_LAUNCHER=$<TARGET_FILE:sattrak_launcher>")
+        endif()
+        add_test(NAME Test_Installer_Packaging COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/test_installer_packaging.py")
     endif()
 endif()
 add_executable(test_sky_catalog tests/test_sky_catalog.cpp src/gui/sky_catalog.cpp)

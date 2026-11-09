@@ -23,9 +23,11 @@ Windows uses WinHTTP and macOS/Linux use libcurl with certificate verification e
 
 Automatic installation supports the registered per-user Windows installation and
 managed per-user macOS/Debian installations. Unmanaged portable/source builds,
-Homebrew installations, and system `.deb` packages offer a release link; they are
-not rewritten by the app. Debian native update archives use a per-user install,
-not `apt` or `dpkg`.
+Homebrew and unmanaged system installations offer a release link. The official
+[desktop installers](INSTALLERS.md) supply a native launcher that prepares this same
+per-user layout. Neither app updates nor the launcher rewrite system-owned app
+files. Debian package upgrades refresh the bootstrap payload through apt/dpkg;
+per-user app updates operate separately after launch.
 
 ## macOS and Debian native installations
 
@@ -33,8 +35,10 @@ Native packages require **Python 3.9+** on PATH at runtime. The release workflow
 builds macOS 13+ packages for Apple Silicon and Intel, and Debian 12+ packages for
 amd64 and arm64. Debian also needs its normal OpenGL/X11 runtime libraries and
 `libcurl4`; audio uses the installed audio backend. macOS uses the system libcurl.
-Mac signing/notarization and Finder `.app` packaging remain separate release work;
-these archives use a terminal launcher and do not bypass Gatekeeper.
+The standalone update archives use a terminal launcher. Initial installation can
+also use the [Finder app/DMG/PKG or Debian package](INSTALLERS.md). Developer ID
+signing and notarization require your release credentials; no Gatekeeper
+quarantine attributes are removed.
 
 Build the package locally, using the release version you intend to publish:
 

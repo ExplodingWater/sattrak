@@ -27,6 +27,7 @@
 #include "gui/tutorial.hpp"
 #include "gui/update_checker.hpp"
 #include "gui/native_update.hpp"
+#include "gui/platform_application.hpp"
 #include "../../tests/update_checks.hpp"
 #include "../../tests/tutorial_checks.hpp"
 #include "../../tests/accessibility_checks.hpp"
@@ -137,10 +138,19 @@ int main(int argc, char** argv) {
     std::cout << "  sattrak                             \n";
     std::cout << "========================================================\n";
 
+#ifdef __APPLE__
+    gui::setMacApplicationName();
+#endif
     if (!glfwInit()) {
         std::cerr << "CRITICAL ERROR: Failed to initialize GLFW.\n";
         return -1;
     }
+#ifdef __APPLE__
+    gui::setMacApplicationIcon();
+#elif defined(__linux__)
+    glfwWindowHintString(GLFW_X11_CLASS_NAME,"sattrak");
+    glfwWindowHintString(GLFW_X11_INSTANCE_NAME,"sattrak");
+#endif
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);

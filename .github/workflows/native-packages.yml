@@ -30,11 +30,17 @@ jobs:
           cmake --build build --parallel 3
           ctest --test-dir build --output-on-failure
       - name: Package
-        run: cmake --build build --target native_package
+        run: cmake --build build --target native_package macos_installer
       - uses: actions/upload-artifact@v4
         with:
           name: native-macos-${{ runner.arch }}
-          path: build/packages/*
+          path: |
+            build/packages/*
+            build/installers/*.dmg
+            build/installers/*.pkg
+            build/installers/*.deb
+            build/installers/*.sha256
+          compression-level: 0
           if-no-files-found: error
   debian:
     strategy:
@@ -50,7 +56,7 @@ jobs:
       - name: Install build dependencies
         run: |
           apt-get update
-          apt-get install -y git ca-certificates build-essential cmake python3 libcurl4-openssl-dev libgl1-mesa-dev xorg-dev libasound2-dev passwd util-linux
+          apt-get install -y git ca-certificates build-essential cmake python3 libcurl4-openssl-dev libgl1-mesa-dev xorg-dev libasound2-dev passwd util-linux dpkg-dev desktop-file-utils
       - uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -63,9 +69,20 @@ jobs:
           chown -R sattrak-test:sattrak-test build
           runuser -u sattrak-test -- ctest --test-dir build --output-on-failure
       - name: Package
-        run: cmake --build build --target native_package
+        run: cmake --build build --target native_package debian_installer
+      - name: Verify installed Debian package as a normal user
+        run: |
+          apt-get install -y ./build/installers/*.deb
+          desktop-file-validate /usr/share/applications/sattrak.desktop
+          runuser -u sattrak-test -- env SATTRAK_USER_INSTALL_ROOT="$GITHUB_WORKSPACE/build/debian-install-smoke" /usr/bin/sattrak --native-install-info
       - uses: actions/upload-artifact@v4
         with:
           name: native-debian-${{ runner.arch }}
-          path: build/packages/*
+          path: |
+            build/packages/*
+            build/installers/*.dmg
+            build/installers/*.pkg
+            build/installers/*.deb
+            build/installers/*.sha256
+          compression-level: 0
           if-no-files-found: error
