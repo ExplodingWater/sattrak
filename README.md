@@ -41,6 +41,10 @@ Optional music and recorded amateur-radio communications accompany the view. The
 
 ## Get started
 
+sattrak checks GitHub for app updates at launch, downloads verified updates for the installed Windows app and installs them when you close it
+
+Retry through **Settings → General → App updates → Check now** — [update behavior and release versions](docs/APP_UPDATES.md)
+
 Windows builds are available under [Releases](https://github.com/ExplodingWater/sattrak/releases). If a setup executable is provided, run it to install for your Windows account. For portable ZIPs, extract the whole archive and run **ag.exe**, keeping `assets/` and `earth_texture.jpg` beside it. Releases marked **Pre-release** are development previews.
 
 Use **Flight Director & Camera** to choose a view and open **Settings**. Move over the 3D view with **WASD**, hold the **right mouse button** or use the **arrow keys** to look around, and scroll to zoom. **Satellite Orbit** keeps the spacecraft in the center while you rotate around it. Hover over controls for explanations.

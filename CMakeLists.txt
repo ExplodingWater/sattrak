@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
 project(sattrak VERSION 1.0.0 LANGUAGES C CXX DESCRIPTION "Spacecraft Dynamics and Supersonic CFD Simulation")
+set(SATTRAK_RELEASE_VERSION "1.0.0-preview.20261103" CACHE STRING "Release tag version used by the update checker")
+if(NOT SATTRAK_RELEASE_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+[-+A-Za-z0-9.]*$")
+    message(FATAL_ERROR "SATTRAK_RELEASE_VERSION must be a semantic release version")
+endif()
 
 # Require modern C++20 standard
 set(CMAKE_CXX_STANDARD 20)
@@ -53,6 +57,7 @@ target_include_directories(sattrak_sgp4 PUBLIC external/sgp4)
 
 set(GUI_SOURCES
     src/gui/main_gui.cpp
+    src/gui/update_checker.cpp
     src/gui/gl_util.cpp
     src/gui/satellite_model.cpp
     src/gui/research_catalog.cpp
@@ -84,6 +89,13 @@ set(GUI_SOURCES
 )
 
 add_executable(ag ${GUI_SOURCES})
+target_compile_definitions(ag PRIVATE SATTRAK_RELEASE_VERSION="${SATTRAK_RELEASE_VERSION}")
+find_package(Threads REQUIRED)
+target_link_libraries(ag PRIVATE Threads::Threads)
+if(NOT WIN32)
+    find_package(CURL REQUIRED)
+    target_link_libraries(ag PRIVATE CURL::libcurl)
+endif()
 
 target_include_directories(ag PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -131,6 +143,22 @@ endif()
 # ==============================================================================
 include(CTest)
 if(BUILD_TESTING)
+if(WIN32)
+    add_executable(test_auto_update tests/test_auto_update.cpp)
+    target_link_libraries(test_auto_update PRIVATE bcrypt advapi32)
+    add_test(NAME Test_Auto_Update_Verification COMMAND test_auto_update)
+    add_executable(sattrak_updater_fixture WIN32 EXCLUDE_FROM_ALL tests/updater_fixture.cpp)
+    target_link_libraries(sattrak_updater_fixture PRIVATE bcrypt advapi32 shell32)
+    if(MSVC)
+        set_property(TARGET sattrak_updater_fixture PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+endif()
+if(BUILD_GUI)
+    add_test(NAME Test_Update_Worker COMMAND ag --update-smoke-test)
+    set_tests_properties(Test_Update_Worker PROPERTIES TIMEOUT 10)
+endif()
+add_executable(test_update_release tests/test_update_release.cpp)
+add_test(NAME Test_Update_Release COMMAND test_update_release)
 add_executable(test_tutorial_state tests/test_tutorial_state.cpp)
 add_test(NAME Test_Tutorial_State COMMAND test_tutorial_state)
 
