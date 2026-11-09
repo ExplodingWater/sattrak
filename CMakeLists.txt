@@ -54,6 +54,8 @@ target_include_directories(sattrak_sgp4 PUBLIC external/sgp4)
 set(GUI_SOURCES
     src/gui/main_gui.cpp
     src/gui/gl_util.cpp
+    src/gui/sky_catalog.cpp
+    src/gui/sky_renderer.cpp
     src/gui/satellite_model.cpp
     src/gui/research_catalog.cpp
     src/gui/catalog_updates.cpp
@@ -131,6 +133,9 @@ endif()
 # ==============================================================================
 include(CTest)
 if(BUILD_TESTING)
+add_executable(test_sky_catalog tests/test_sky_catalog.cpp src/gui/sky_catalog.cpp)
+add_test(NAME Test_Sky_Catalog COMMAND test_sky_catalog "${CMAKE_CURRENT_SOURCE_DIR}/assets/sky")
+
 add_executable(test_tutorial_state tests/test_tutorial_state.cpp)
 add_test(NAME Test_Tutorial_State COMMAND test_tutorial_state)
 
@@ -152,6 +157,11 @@ add_test(NAME Test_Orbit_Replay COMMAND test_orbit_replay "${CMAKE_CURRENT_SOURC
 add_executable(test_orbit_recording tests/test_orbit_recording.cpp src/gui/orbit_recording.cpp src/gui/orbit_replay.cpp)
 add_test(NAME Test_Orbit_Recording COMMAND test_orbit_recording)
 if(BUILD_GUI)
+    # Optional real-GPU check; run manually from a graphical desktop session.
+    add_executable(test_sky_renderer tests/test_sky_renderer.cpp
+        src/gui/sky_catalog.cpp src/gui/sky_renderer.cpp src/gui/gl_util.cpp external/glad/src/glad.c)
+    target_include_directories(test_sky_renderer SYSTEM PRIVATE external/glad/include external/stb)
+    target_link_libraries(test_sky_renderer PRIVATE glfw OpenGL::GL)
     add_executable(test_radio_player tests/test_radio_player.cpp src/gui/music_player.cpp src/gui/alarm_audio.cpp src/gui/radio_commands.cpp)
     add_executable(test_research_catalog tests/test_research_catalog.cpp src/gui/research_catalog.cpp)
     target_link_libraries(test_research_catalog PRIVATE sattrak_sgp4)

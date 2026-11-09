@@ -18,6 +18,7 @@
 #include "gui/music_player.hpp"
 #include "gui/display_settings.hpp"
 #include "gui/action_bindings.hpp"
+#include "gui/sky_renderer.hpp"
 #include <random>
 #include <future>
 
@@ -118,6 +119,7 @@ private:
     ActionBindings m_actions;
     void registerActions();
     void saveHudPreferences();
+    void saveSkyPreferences();
     bool m_panelVisible[4] = {false,false,false,false};
     bool m_rememberPreferences=false,m_hudVisible=true,m_showAltimeters=true;
     float m_markerOpacity=1,m_lastMarkerOpacity=1;
@@ -257,7 +259,9 @@ private:
     ShaderProgram m_shader3D;
     ShaderProgram m_lineShader;
     ShaderProgram m_atmosphereShader;
-    unsigned int m_starVao = 0, m_starVbo = 0;
+    SkyRenderer m_sky;
+    SkySettings m_skySettings;
+    double m_skyEpochUtc = 0;
     aero::math::Vec3 m_cameraEye{0, 10, 26};
     aero::math::Vec3 m_cameraForward{0, 0, -1};
     aero::math::Vec3 m_cameraUp{0, 1, 0};

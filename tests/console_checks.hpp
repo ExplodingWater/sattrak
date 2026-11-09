@@ -5,6 +5,7 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 #include <cstring>
+#include <iostream>
 namespace gui {
 struct ConsoleChecks {
     static bool commands(DeveloperConsole& console,MusicPlayer& player,ADCSView& view,DisplaySettings& display){
@@ -28,6 +29,17 @@ struct ConsoleChecks {
         view.m_realScale=true;run("camera.speed 10");run("sim.speed 20");view.m_realScale=false;
         if(view.m_userSpeedKmS!=10||view.m_timeWarp!=12)return false;
         run("audio.master 0.5");if(player.masterVolumePercent()!=50)return false;
+        const int previousMusicVolume=player.volumePercent();
+        run("volume 75");if(player.volumePercent()!=75||player.masterVolumePercent()!=50)return false;
+        run("audio.music 1.25");if(player.volumePercent()!=125)return false;
+        for(const auto* invalid:{"volume -1","volume 201","volume nan","volume 75.5","volume 20 extra","audio.music inf","audio.music 2.01","audio.music 0.5 extra"}) {
+            run(invalid);if(player.volumePercent()!=125)return false;
+        }
+        run("volume");if(console.lines[console.lines.size()-2]!="Current music volume: 125%")return false;
+        run("volume 0");if(player.volumePercent()!=0)return false;
+        run("audio.music 2");if(player.volumePercent()!=200)return false;
+        player.setVolumePercent(previousMusicVolume);
+        std::cout<<"Music volume commands: percentage, gain, query, limits and invalid arguments passed.\n";
         run("ui.scale 125");if(display.uiScale!=125)return false;
         run("trail.clear");if(view.m_trail.size()!=1)return false;
         run("expert.reset");if(view.m_numericalOrbit||view.m_sensorNoise)return false;
@@ -71,7 +83,11 @@ struct ConsoleChecks {
         console.refreshSuggestions("camera.s");
         if(console.suggestions.size()!=2)return false;
         console.refreshSuggestions("camera.fov ");
-        return console.suggestions.size()==1&&console.suggestions[0].replacement=="camera.fov 45";
+        if(console.suggestions.size()!=1||console.suggestions[0].replacement!="camera.fov 45")return false;
+        console.refreshSuggestions("vol");
+        if(console.suggestions.size()!=1||console.suggestions[0].replacement!="volume ")return false;
+        console.refreshSuggestions("audio.music ");
+        return console.suggestions.size()==1&&console.suggestions[0].replacement=="audio.music 1";
     }
 };
 }

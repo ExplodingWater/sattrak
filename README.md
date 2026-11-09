@@ -39,6 +39,8 @@ The 22-step walkthrough opens and spotlights each main part of the UI. Use **< c
 
 Optional music and recorded amateur-radio communications accompany the view. Their volume and playback can be controlled independently. The app works offline; optional internet updates refresh the satellite catalog used for orbit predictions.
 
+The night sky uses 5,044 catalog stars with J2000 positions, brightness and approximate colors. Enable constellation lines and names under **Settings → Video → Night sky**. See [sky controls and accuracy limits](docs/NIGHT_SKY.md).
+
 ## Get started
 
 Windows builds are available under [Releases](https://github.com/ExplodingWater/sattrak/releases). If a setup executable is provided, run it to install for your Windows account. For portable ZIPs, extract the whole archive and run **ag.exe**, keeping `assets/` and `earth_texture.jpg` beside it. Releases marked **Pre-release** are development previews.
@@ -50,6 +52,12 @@ The orbit window contains **Record path**, **Stop recording**, **Save** and **Sa
 Press **backtick (`)** for the command console. Use Up/Down to select suggestions and Tab to complete them. For example, `radio.play 01` plays the first recording in `assets/radio`, and `radio.stop` stops radio playback.
 
 Type `help` for available commands. You can adjust simulation speed, camera sensitivity and field of view, orbit altitude and inclination, master volume and UI scale. Suggestions appear as you type, and entering a value command without its argument shows its range and default. The console works while Settings and orbit replay are open.
+
+Music volume uses the same line-and-thumb bar as the song timeline; the adjacent
+numeric field still accepts an exact percentage. In the backtick console, use
+`volume 75` for 75%, or `audio.music 0.75` for the same setting. Both support
+0–200%; `volume` alone reports the current percentage. `audio.master 0.5`
+sets the separate master level to 50% for all audio.
 
 Settings uses a **General / Video / Controls / Advanced** sidebar. Video includes
 spacecraft marker opacity, for example: `hud.spacecraft_marker 0.35` fades the circle and its

@@ -20,6 +20,8 @@ constexpr CommandInfo commands[]={
     {"orbit.altitude","650","Circular orbit altitude in km, 400..1500",400,1500},
     {"orbit.inclination","51.6","Circular orbit inclination in degrees, 0..98",0,98},
     {"audio.master","1","Master volume, 0..2 (1 = 100%)",0,2},
+    {"audio.music","1","Music volume, 0..2 (1 = 100%); matches the music bar",0,2},
+    {"volume","100","Music volume in whole percent, 0..200; matches the music bar",0,200},
     {"ui.scale","100","UI scale in percent, integer 75..200",75,200},
     {"hud.spacecraft_marker","1","Spacecraft circle and label opacity, 0..1",0,1},
     {"satellite.select","","Select catalog satellite by NORAD ID (research mode unlocked)",1,999999999},
@@ -107,7 +109,11 @@ void DeveloperConsole::execute(MusicPlayer& player,ADCSView& view,DisplaySetting
         const bool takesValue=command.value[0]||name=="satellite.select";
         double value=0;
         if(takesValue){
-            if(!(stream>>argument)){lines.push_back(std::string(command.help)+(command.value[0]?std::string("; default: ")+command.value:"; no default satellite"));return;}
+            if(!(stream>>argument)){
+                if(name=="volume"||name=="audio.music")
+                    lines.push_back("Current music volume: "+std::to_string(player.volumePercent())+"%");
+                lines.push_back(std::string(command.help)+(command.value[0]?std::string("; default: ")+command.value:"; no default satellite"));return;
+            }
             try{size_t used=0;value=std::stod(argument,&used);if(used!=argument.size()||!std::isfinite(value)||value<command.minimum||value>command.maximum)throw std::invalid_argument("range");}
             catch(...){lines.push_back(std::string("Error: ")+command.help);return;}
         }
@@ -117,7 +123,7 @@ void DeveloperConsole::execute(MusicPlayer& player,ADCSView& view,DisplaySetting
            (name=="camera.speed"&&!view.m_realScale)){
             lines.push_back("Error: this value is controlled by the current mode. "+std::string(command.help));return;
         }
-        if((name=="ui.scale"||name=="satellite.select")&&std::floor(value)!=value){lines.push_back("Error: enter a whole number.");return;}
+        if((name=="ui.scale"||name=="satellite.select"||name=="volume")&&std::floor(value)!=value){lines.push_back("Error: enter a whole number.");return;}
         if(name=="sim.speed")view.m_timeWarp=float(value);
         else if(name=="camera.speed")view.m_userSpeedKmS=float(value);
         else if(name=="camera.sensitivity")view.m_sensitivity=float(value);
@@ -125,6 +131,8 @@ void DeveloperConsole::execute(MusicPlayer& player,ADCSView& view,DisplaySetting
         else if(name=="orbit.altitude")view.m_orbitAltitudeKm=value;
         else if(name=="orbit.inclination")view.m_orbitInclinationDeg=value;
         else if(name=="audio.master"){player.setMasterVolumePercent(int(std::round(value*100)));view.m_alarmAudio.setGain(player.masterVolumePercent()/100.f);}
+        else if(name=="audio.music")player.setVolumePercent(int(std::round(value*100)));
+        else if(name=="volume")player.setVolumePercent(int(value));
         else if(name=="ui.scale")display.uiScale=int(value);
         else if(name=="hud.spacecraft_marker")view.setMarkerOpacity(float(value));
         else if(name=="expert.reset")view.resetExpertSettings();

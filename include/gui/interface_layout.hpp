@@ -7,23 +7,39 @@ inline bool topBarVisible=true, topBarHover=false;
 inline float topBarHeight(){return std::max(32.f*ImGui::GetStyle().FontScaleMain,ImGui::GetFrameHeight()+4);}
 inline float topInset(){return topBarVisible?topBarHeight():0.f;}
 inline bool horizontalPanels(){return panelPlacement==0||panelPlacement==1||panelPlacement==3;}
-// Preserve the native slider's keyboard, drag and focus behavior, with a line and circular thumb.
-inline bool mediaSeek(const char* id,float* value,float duration) {
+// Style native sliders so mouse dragging, keyboard navigation and focus remain
+// available while seek and volume share the same line-and-thumb appearance.
+inline void beginMediaTrack() {
     const float s=ImGui::GetStyle().FontScaleMain;
     for(auto color:{ImGuiCol_FrameBg,ImGuiCol_FrameBgHovered,ImGuiCol_FrameBgActive,ImGuiCol_SliderGrab,ImGuiCol_SliderGrabActive})
         ImGui::PushStyleColor(color,ImVec4(0,0,0,0));
     ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize,14*s);
     ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize,0);
-    bool changed=ImGui::SliderFloat(id,value,0,std::max(1.f,duration),"",ImGuiSliderFlags_AlwaysClamp|ImGuiSliderFlags_NoInput);
+}
+inline void endMediaTrack(float fraction) {
     ImGui::PopStyleVar(2);ImGui::PopStyleColor(5);
+    const float s=ImGui::GetStyle().FontScaleMain;
     auto a=ImGui::GetItemRectMin(),b=ImGui::GetItemRectMax();
     const float left=a.x+2+7*s,right=b.x-2-7*s,y=(a.y+b.y)*.5f;
-    const float x=left+(right-left)*std::clamp(*value/std::max(1.f,duration),0.f,1.f);
+    const float x=left+(right-left)*std::clamp(fraction,0.f,1.f);
     auto* d=ImGui::GetWindowDrawList();
     d->AddLine(ImVec2(left,y),ImVec2(right,y),ImGui::GetColorU32(ImGuiCol_TextDisabled),2*s);
     d->AddLine(ImVec2(left,y),ImVec2(x,y),ImGui::GetColorU32(ImGuiCol_SliderGrabActive),3*s);
     d->AddCircleFilled(ImVec2(x,y),6*s,ImGui::GetColorU32(ImGuiCol_Text));
+}
+inline bool mediaSeek(const char* id,float* value,float duration) {
+    beginMediaTrack();
+    const bool changed=ImGui::SliderFloat(id,value,0,std::max(1.f,duration),"",ImGuiSliderFlags_AlwaysClamp|ImGuiSliderFlags_NoInput);
+    endMediaTrack(*value/std::max(1.f,duration));
     if(ImGui::IsItemHovered())ImGui::SetTooltip("Seek, %.0f of %.0f seconds",*value,duration);
+    return changed;
+}
+inline bool mediaVolume(const char* id,int* percent) {
+    beginMediaTrack();
+    const bool changed=ImGui::SliderInt(id,percent,0,200,"",ImGuiSliderFlags_AlwaysClamp|ImGuiSliderFlags_NoInput);
+    endMediaTrack(*percent/200.f);
+    if(ImGui::IsItemHovered() || ImGui::IsItemFocused())
+        ImGui::SetTooltip("Music volume: %d%%. Drag or use arrow keys; range 0–200%%.\nEnter an exact percentage in the field beside the bar.",*percent);
     return changed;
 }
 }

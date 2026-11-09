@@ -12,7 +12,7 @@
 #include "imgui_internal.h"
 #include <array>
 #include <fstream>
-#include <random>
+#include <chrono>
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -23,8 +23,8 @@ const float EARTH_RADIUS_3D = 12.0f; // Scaled 3D Earth radius
 const double KM_TO_3D = EARTH_RADIUS_3D / 6378.137;
 
 
-// Each panel follows its edge until its title bar is dragged. ImGui retains
-// detached positions; the small companion file retains the attachment intent.
+// Each panel follows its edge until its title bar is dragged ImGui retains
+// detached positions; the small companion file retains the attachment intent
 static std::array<bool, 4>& detachedPanels() {
     static std::array<bool, 4> state = [] {
         std::array<bool, 4> result{};
@@ -267,22 +267,10 @@ bool ADCSView::init() {
             m_stations[i].imageAspect = float(w) / h;
         }
     }
-    std::mt19937 random(7429);
-    std::uniform_real_distribution<float> unit(0, 1);
-    std::vector<float> stars;
-    for (int i = 0; i < 3000; ++i) {
-        float y = 2*unit(random)-1, angle = 6.2831853f*unit(random);
-        float r = std::sqrt(1-y*y);
-        stars.insert(stars.end(), {450*r*std::cos(angle), 450*y, 450*r*std::sin(angle)});
-    }
-    glGenVertexArrays(1, &m_starVao);
-    glGenBuffers(1, &m_starVbo);
-    glBindVertexArray(m_starVao);
-    glBindBuffer(GL_ARRAY_BUFFER, m_starVbo);
-    glBufferData(GL_ARRAY_BUFFER, stars.size()*sizeof(float), stars.data(), GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), nullptr);
-    glEnableVertexAttribArray(0);
-    glBindVertexArray(0);
+    if (!m_sky.init("assets/sky"))
+        std::cerr << "Sky unavailable: " << m_sky.error() << '\n';
+    m_skyEpochUtc = std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();
+    m_earthSpinAngleRad = earthSiderealAngle(m_skyEpochUtc);
 
     m_earthMesh = createSphereMesh(EARTH_RADIUS_3D, 256, 384);
     m_busMesh = createBoxMesh(0.7f, 0.7f, 1.2f);
@@ -386,7 +374,7 @@ void ADCSView::handleInput(GLFWwindow* window, float dt) {
             key(GLFW_KEY_LEFT_SHIFT) || key(GLFW_KEY_RIGHT_SHIFT), dt);
     }
 
-    // 3. Left-Click Drag: Rotate Earth OR Arcball Orbit
+    // Earth rotation, sat rotation and free orbit arcball are all bound to left click dragging but it's not captured by imgui if the cursor is over the scene
     if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS && sceneInput) {
         double mouseX, mouseY;
         glfwGetCursorPos(window, &mouseX, &mouseY);
@@ -401,7 +389,7 @@ void ADCSView::handleInput(GLFWwindow* window, float dt) {
             m_lastLeftMouseY = mouseY;
 
             if (!m_replayActive && ((m_isEarthManualRotate && m_camPreset != CameraPreset::SatelliteOrbit) || glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)) {
-                // Interactive Earth rotation around polar axis
+                // Earth rotation around polar axis
                 m_earthSpinAngleRad += dx * 0.008;
             } else if (m_camPreset == CameraPreset::SatelliteOrbit) {
                 rotateSatelliteOrbit(dx, dy);
@@ -720,19 +708,10 @@ void ADCSView::render3D(int width, int height) {
     Mat4 view = Mat4::lookAt(camEye, camTarget, camUp);
     Mat4 viewProj = Mat4::multiply(proj, view);
 
-    // An eye-centered star sphere has no translation parallax and never clips as we fly.
-    glDepthMask(GL_FALSE);
-    m_lineShader.use();
-    m_lineShader.setMat4("uMVP", Mat4::multiply(proj, Mat4::lookAt(aero::math::Vec3::zero(), m_cameraForward, m_cameraUp)));
-    glBindVertexArray(m_starVao);
-    m_lineShader.setVec4("uColor", 0.38f, 0.43f, 0.55f, 1);
-    glPointSize(1.0f);
-    glDrawArrays(GL_POINTS, 0, 2600);
-    m_lineShader.setVec4("uColor", 0.8f, 0.85f, 1.0f, 1);
-    glPointSize(2.0f);
-    glDrawArrays(GL_POINTS, 2600, 400);
-    glBindVertexArray(0);
-    glDepthMask(GL_TRUE);
+    // Only camera rotation affects distant stars. Keep the catalog in the
+    // same inertial axes as imported J2000 orbits; Earth rotates beneath it.
+    m_sky.draw(Mat4::multiply(proj, Mat4::lookAt(aero::math::Vec3::zero(),
+        m_cameraForward, m_cameraUp)), width, height, m_skySettings);
 
     // 1. Earth Sphere
     m_shader3D.use();
@@ -1173,7 +1152,7 @@ void ADCSView::drawSettings() {
         }
         explain("Place the free camera 20 meters above the satellite. It continues moving at the selected speed; set satellite speed to zero to inspect it at rest.");
         ImGui::EndDisabled();
-        ImGui::TextWrapped("WASD: fly | E/Q: rise/descend | Shift: boost. Move the pointer onto the 3D scene. Use arrow keys or hold right mouse to look.");
+        ImGui::TextWrapped("WASD for flying, E/Q for rise/descend, Shift to boost boost; Move the pointer onto the 3D scene, use arrow keys or hold right mouse to look around.");
         if(m_audio) {
             ImGui::SeparatorText("Audio");
             float master=float(m_audio->masterVolumePercent()),radio=float(m_audio->radioVolumePercent());
@@ -1181,9 +1160,9 @@ void ADCSView::drawSettings() {
                 m_audio->setMasterVolumePercent(int(std::round(master)));
                 m_alarmAudio.setGain(m_audio->masterVolumePercent()/100.0f);
             }
-            explain("Controls all audio, including music, radio communications and the reentry alarm.");
+            explain("Controls all audio, including music, radio communications and the reentry alarm");
             if(sliderFloatExact("Radio volume",&radio,0,200,"%.0f%%","%.0f"))m_audio->setRadioVolumePercent(int(std::round(radio)));
-            explain("Radio level before master volume. Defaults to 10%. Applies now and to future automatic clips; radio.play --volume overrides it for that clip.");
+            explain("Radio level before master volume, defaults to 10%. Applies now and to future automatic clips; radio.play --volume overrides it for that clip.");
             bool muted=m_audio->radioMuted();
             if(ImGui::Checkbox("Mute radio communications",&muted))m_audio->setRadioMuted(muted);
             ImGui::BeginDisabled(!m_audio->radioPlaying());
@@ -1200,18 +1179,18 @@ void ADCSView::drawSettings() {
                 ImGui::Checkbox("SatNOGS ground stations (red)",&m_showCatalogStations);
                 if(m_showCatalogStations)ImGui::Checkbox("Include offline / testing stations",&m_includeOfflineStations);
                 if(ImGui::Button("Browse satellite details"))m_catalogBrowser=true;
-                ImGui::TextWrapped("Click a cyan satellite square for details. Its name stays pinned while the information window is open. Red markers are SatNOGS ground stations.");
+                ImGui::TextWrapped("Click one of the satellite squares for further details around that body. Red markers are SatNOGS ground stations");
             }
             ImGui::EndDisabled();
             ImGui::TextWrapped("%s",m_researchCatalog.status.c_str());
-            ImGui::TextWrapped("CelesTrak and SatNOGS orbital elements. Prediction starts at session UTC and advances with simulation time. Older elements are less reliable; not live tracking.");
-            if(m_simTimeSec>7*86400) ImGui::TextWrapped("Orbital predictions become less reliable far from the catalog date.");
+            ImGui::TextWrapped("CelesTrak and SatNOGS orbital elements. Prediction starts at session UTC and advances with simulation time. Older elements are less reliable because there's no live tracking.");
+            if(m_simTimeSec>7*86400) ImGui::TextWrapped("Note that orbital predictions become less reliable far from the catalog date.");
         }
         if(ImGui::Button("About",ImVec2(-1,28)))ImGui::OpenPopup("About sattrak");
         if(ImGui::BeginPopupModal("About sattrak",nullptr,ImGuiWindowFlags_AlwaysAutoResize)) {
             ImGui::Text("sattrak");
             ImGui::Separator();
-            ImGui::Text("Martin Hafizi | ExplodingWater");
+            ImGui::Text("Martin Hafizi // ExplodingWater");
             ImGui::TextLinkOpenURL("github.com/ExplodingWater","https://github.com/ExplodingWater");
             ImGui::Text("Satellite tracking, orbital dynamics and aerospace simulation.");
             ImGui::Text("Made with Love (and OpenGL)");
@@ -1223,11 +1202,27 @@ void ADCSView::drawSettings() {
         ImGui::SeparatorText("Camera and overlays");
         sliderFloatExact("Field of view",&m_cameraFov,10,120,"%.0f deg","%.0f");
         if(sliderFloatExact("Spacecraft marker opacity",&m_markerOpacity,0,1,"%.2f","%.2f"))setMarkerOpacity(m_markerOpacity);
-        explain("Fades the spacecraft circle, label and label background together. Zero hides them. Range is camera-to-spacecraft distance, not altitude.");
+        explain("Fades the spacecraft circle, label and label background together, zero hides them. Range is camera-to-spacecraft distance, not altitude.");
         ImGui::Checkbox("Show HUD panels",&m_hudVisible);
         if(ImGui::Checkbox("Show camera and satellite altimeters",&m_showAltimeters))saveHudPreferences();
-        explain("Height above the simulation's spherical Earth surface (radius 6,378.137 km). Includes free camera motion and imported orbits. Not terrain clearance.");
+        explain("Height above the simulation's spherical Earth surface (w/ radius 6,378.137 km).");
         ImGui::Checkbox("Satellite trail since t=0",&m_showTrail);
+        ImGui::SeparatorText("Night sky");
+        bool skyChanged = ImGui::Checkbox("Catalog stars", &m_skySettings.stars);
+        skyChanged |= ImGui::Checkbox("Constellation lines", &m_skySettings.lines);
+        skyChanged |= ImGui::Checkbox("Constellation names", &m_skySettings.labels);
+        skyChanged |= sliderFloatExact("Limiting magnitude", &m_skySettings.magnitudeLimit, 0, 6, "%.1f", "%.1f");
+        explain("Higher values reveal fainter stars. The bundled catalog reaches magnitude 6.");
+        skyChanged |= sliderFloatExact("Star brightness", &m_skySettings.brightness, .2f, 3.f, "%.2fx", "%.2f");
+        if(skyChanged)saveSkyPreferences();
+        if(!m_sky.error().empty())ImGui::TextWrapped("Sky unavailable: %s",m_sky.error().c_str());
+        else ImGui::TextWrapped("%d catalog stars. J2000 positions; approximate star colors. Constellation lines are guide figures.",int(m_sky.catalog().stars.size()));
+        ImGui::TextWrapped("Earth starts aligned to session UTC. Manual rotation and Spin Warp change the ground sky. No precession, proper motion or atmospheric visibility model.");
+        if(ImGui::Button("Align Earth to simulation UTC")) {
+            m_earthSpinAngleRad=earthSiderealAngle(m_replayActive?m_currentOrbit.utc:m_skyEpochUtc+m_simTimeSec);
+            m_autoEarthSpin=true;m_earthSpinWarp=1;
+        }
+        explain("Restores approximate sidereal alignment and normal Earth spin. Imported replay uses its trajectory UTC.");
         if(m_display)m_display->draw();
         } else if(m_settingsCategory==2) {
         ImGui::BeginDisabled(!m_realScale);
@@ -1239,18 +1234,18 @@ void ADCSView::drawSettings() {
         sliderFloatExact("Wheel sensitivity", &m_scrollSensitivity, 0.1f, 5.0f, "%.2fx", "%.2f");
         explain("Zoom/dolly sensitivity. The wheel affects the scene only while the cursor is outside every panel and popup.");
         ImGui::Separator();
-        ImGui::TextWrapped("WASD: fly | Q/E or C/Space: vertical | Shift: boost | arrows or right drag: look.");
+        ImGui::TextWrapped("WASD for flying, Q/E or C/Space: vertical, press Shift to boost, and arrows or right drag to look around");
         m_actions.drawEditor();
         } else {
         ImGui::TextWrapped("Experimental entry, dynamics, sensors and control parameters.");
         ImGui::Checkbox("Force quick repositioning to target",&m_quickReposition);
-        explain("Override the conservative 1:1 slew profile with the fast demonstration controller. These are illustrative limits, not vehicle-specific flight software.");
+        explain("Override the conservative 1:1 slew profile with the fast demonstration controller (virtual limits)");
         ImGui::BeginDisabled(m_replayActive||m_numericalOrbit);
         if (ImGui::Checkbox("Atmospheric entry preview", &m_entryPreview)) {
             m_orbitAltitudeKm=m_entryPreview ? 80 : 650;
             if(m_entryPreview) m_camPreset=CameraPreset::SatelliteOrbit;
         }
-        explain("Prescribed descent with geometry-dependent heating. Does not solve drag-driven trajectory, ablation or breakup. Disable to return to 650 km.");
+        explain("Prescribed descent with geometry-dependent heating. This does not solve drag-driven trajectory, ablation or breakup. Disable to return to 650 km (default).");
         if(m_entryPreview) {
             float altitude=float(m_orbitAltitudeKm);
             if(sliderFloatExact("Entry altitude",&altitude,20,150,"%.1f km","%.1f")) m_orbitAltitudeKm=altitude;
@@ -1297,7 +1292,7 @@ void ADCSView::drawFlightOverlay() {
     draw->AddRectFilled(ImVec2(textPos.x-4,textPos.y-3), ImVec2(textPos.x+size.x+4,textPos.y+size.y+3), IM_COL32(0,0,0,int(200*m_markerOpacity)), 3);
     draw->AddText(textPos, color, label);
     char speed[128];
-    snprintf(speed, sizeof(speed), "USER %.3f km/s  |  SET %.3f km/s", m_actualUserSpeedKmS, m_userSpeedKmS);
+    snprintf(speed, sizeof(speed), "USER %.3f km/s,  SET %.3f km/s", m_actualUserSpeedKmS, m_userSpeedKmS);
     ImFont* font = ImGui::GetIO().Fonts->Fonts.Size > 1 ? ImGui::GetIO().Fonts->Fonts[1] : ImGui::GetFont();
     auto textSize = font->CalcTextSizeA(20, FLT_MAX, 0, speed);
     // Right of the default charts when space permits; otherwise keep it on screen.
@@ -1703,9 +1698,7 @@ void ADCSView::cleanup() {
         if (station.texture) glDeleteTextures(1, &station.texture);
         station.texture = 0;
     }
-    if (m_starVao) glDeleteVertexArrays(1, &m_starVao);
-    if (m_starVbo) glDeleteBuffers(1, &m_starVbo);
-    m_starVao = m_starVbo = 0;
+    m_sky.cleanup();
     updateAlarm(false);
     m_entryShader.cleanup();
     if(m_entryVao) glDeleteVertexArrays(1,&m_entryVao);

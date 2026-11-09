@@ -10,9 +10,12 @@
 #include <iostream>
 
 namespace gui {
+// Complete the step type before initializing the constexpr table (Apple Clang).
+struct TutorialStep { const char* title; const char* window; const char* text; int panel=-1; int category=-1; float scroll=0; };
+
 class Tutorial {
 public:
-    struct Step { const char* title; const char* window; const char* text; int panel=-1; int category=-1; float scroll=0; };
+    using Step = TutorialStep;
     inline static constexpr Step steps[] = {
         {"Welcome to sattrak", "", "Explore Earth from orbit. This guided tour opens each part of the interface for you. The highlighted area is the subject of the current step. Use < and >, or Choose a step to jump anywhere. Skip tutorial is always available. The simulation is paused during the tour."},
         {"Your panel buttons", "Orbital panels", "These icons toggle Telemetry, Live charts, Flight director and camera, World map, Orbit replay and Settings. Hover an icon for its name. Settings > Video > Interface lets you place the strip at the bottom center or along either top edge, horizontally or vertically."},

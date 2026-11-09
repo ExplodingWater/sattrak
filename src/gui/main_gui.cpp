@@ -372,8 +372,11 @@ int main(int argc, char** argv) {
                     float elapsed=float(musicPlayer.elapsedSeconds()),duration=float(musicPlayer.durationSeconds());
                     ImGui::Text("%d:%02d, -%d:%02d",int(elapsed)/60,int(elapsed)%60,int(std::max(0.0f,duration-elapsed))/60,int(std::max(0.0f,duration-elapsed))%60);
                     ImGui::SetNextItemWidth(280*uiScale);if(gui::mediaSeek("##compact_seek",&elapsed,duration))musicPlayer.seekSeconds(elapsed);
-                    ImGui::EndDisabled();int volume=musicPlayer.volumePercent();ImGui::SetNextItemWidth(160*uiScale);
-                    if(ImGui::SliderInt("Volume",&volume,0,200,"%d%%"))musicPlayer.setVolumePercent(volume);
+                    ImGui::EndDisabled();
+                    ImGui::TextUnformatted("Volume");ImGui::SameLine();
+                    int volume=musicPlayer.volumePercent();ImGui::SetNextItemWidth(240*uiScale);
+                    if(gui::mediaVolume("##compact_volume_slider",&volume))musicPlayer.setVolumePercent(volume);
+                    ImGui::SameLine();
                     ImGui::SetNextItemWidth(80*uiScale);if(ImGui::InputInt("Exact percent",&volume,0,0))musicPlayer.setVolumePercent(volume);
                     ImGui::EndMenu();
                 }
@@ -412,8 +415,8 @@ int main(int argc, char** argv) {
             ImGui::TextUnformatted("Volume");
             ImGui::SameLine();
             int musicVolume=musicPlayer.volumePercent();
-            ImGui::SetNextItemWidth((logicalWidth < 1050 ? 52.0f : 72.0f)*uiScale);
-            bool volumeChanged=ImGui::SliderInt("##music_volume_slider",&musicVolume,0,200,"%d%%",ImGuiSliderFlags_AlwaysClamp);
+            ImGui::SetNextItemWidth(160*uiScale);
+            bool volumeChanged=gui::mediaVolume("##music_volume_slider",&musicVolume);
             ImGui::SameLine();
             ImGui::SetNextItemWidth(46*uiScale);
             volumeChanged|=ImGui::InputInt("##music_volume_exact",&musicVolume,0,0,ImGuiInputTextFlags_CharsDecimal);

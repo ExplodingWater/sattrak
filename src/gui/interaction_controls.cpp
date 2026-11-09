@@ -21,6 +21,11 @@ std::string ADCSView::textDescription() const {
     if (!m_groundTrack2D.empty()) out << "\nGround-track position: latitude " << m_groundTrack2D.back().lat
         << ", longitude " << m_groundTrack2D.back().lon << " degrees.";
     if (m_multiView) out << "\nMultiple views active; camera altitude refers to View 1.";
+    out << "\nSky: " << m_sky.catalog().stars.size() << " J2000 catalog stars. Stars "
+        << (m_skySettings.stars ? "shown" : "hidden") << ", constellation lines "
+        << (m_skySettings.lines ? "shown" : "hidden") << ", constellation names "
+        << (m_skySettings.labels ? "shown" : "hidden") << ".";
+    if(!m_sky.error().empty())out << " " << m_sky.error();
     out << "\nIllustrative simulation, not live spacecraft telemetry.";
     return out.str();
 }
@@ -44,8 +49,23 @@ void ADCSView::configurePreferences(bool remember) {
             m_markerOpacity=std::clamp(opacity,0.f,1.f);m_lastMarkerOpacity=std::clamp(last,.01f,1.f);m_showAltimeters=alt!=0;
         }
     }
+    if(remember) {
+        std::ifstream in("local/sky_settings.txt");
+        int stars,lines,labels;float limit,brightness;
+        if(in>>stars>>lines>>labels>>limit>>brightness &&
+            std::isfinite(limit) && std::isfinite(brightness)) {
+            m_skySettings={stars!=0,lines!=0,labels!=0,std::clamp(limit,0.f,6.f),std::clamp(brightness,.2f,3.f)};
+        }
+    }
     registerActions();
     m_actions.configurePersistence(remember?"local/controls.json":"");
+}
+void ADCSView::saveSkyPreferences() {
+    if(!m_rememberPreferences)return;
+    std::error_code error;std::filesystem::create_directories("local",error);
+    std::ofstream out("local/sky_settings.txt");
+    out<<m_skySettings.stars<<' '<<m_skySettings.lines<<' '<<m_skySettings.labels<<' '
+       <<m_skySettings.magnitudeLimit<<' '<<m_skySettings.brightness<<'\n';
 }
 void ADCSView::registerActions() {
     if(!m_actions.actions.empty())return;
