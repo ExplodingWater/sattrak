@@ -25,6 +25,8 @@
 #include "gui/panel_sidebar.hpp"
 #include "gui/accessibility_panel.hpp"
 #include "gui/tutorial.hpp"
+#include "gui/update_checker.hpp"
+#include "../../tests/update_checks.hpp"
 #include "../../tests/tutorial_checks.hpp"
 #include "../../tests/accessibility_checks.hpp"
 #include "../../tests/gui_view_checks.hpp"
@@ -88,6 +90,10 @@ void applyStealthAerospaceTheme() {
 }
 
 int main(int argc, char** argv) {
+    if(argc>1 && std::strcmp(argv[1],"--check-updates")==0)return gui::UpdateChecker::commandLineCheck();
+    if(argc>1 && std::strcmp(argv[1],"--download-update-test")==0)return gui::UpdateChecker::downloadTest();
+    if(argc>1 && std::strcmp(argv[1],"--update-smoke-test")==0)return gui::UpdateChecks::run();
+    const bool updateUiSmoke=argc>1 && std::strcmp(argv[1],"--update-ui-smoke-test")==0;
     const bool tutorialSmoke = argc > 1 && std::strcmp(argv[1], "--tutorial-smoke-test") == 0;
     const bool tutorialCompact = tutorialSmoke && argc > 2 && std::strcmp(argv[2], "--compact") == 0;
     const bool brandingCapture = argc > 1 && std::strcmp(argv[1], "--capture-branding") == 0;
@@ -102,7 +108,7 @@ int main(int argc, char** argv) {
     const bool displaySmoke = argc > 1 && std::strcmp(argv[1], "--display-smoke-test") == 0;
     const bool catalogSmoke = argc > 1 && std::strcmp(argv[1], "--catalog-smoke-test") == 0;
     const bool interfaceSmoke = argc > 1 && std::strcmp(argv[1], "--interface-smoke-test") == 0;
-    const bool smokeTest = tutorialSmoke || brandingCapture || interfaceSmoke || accessibilitySmoke || catalogSmoke || displaySmoke || consoleSmoke || startupSmoke || orbitSmoke || multiSmoke || modelSmoke || (argc > 1 && std::strcmp(argv[1], "--smoke-test") == 0);
+    const bool smokeTest = updateUiSmoke || tutorialSmoke || brandingCapture || interfaceSmoke || accessibilitySmoke || catalogSmoke || displaySmoke || consoleSmoke || startupSmoke || orbitSmoke || multiSmoke || modelSmoke || (argc > 1 && std::strcmp(argv[1], "--smoke-test") == 0);
     if (!std::filesystem::exists("earth_texture.jpg")) {
         auto executableDir = std::filesystem::absolute(argv[0]).parent_path();
         if (std::filesystem::exists(executableDir / "earth_texture.jpg"))
@@ -231,6 +237,7 @@ int main(int argc, char** argv) {
 
     int activeStudioTab = 0; // 0: GNC & ADCS Studio, 1: Supersonic CFD Studio
     gui::Tutorial tutorial(!smokeTest);
+    if(!smokeTest)gui::appUpdates().start();
     if(tutorialSmoke)gui::tutorialRequested=true;
     double lastTime = glfwGetTime();
 
@@ -483,6 +490,14 @@ int main(int argc, char** argv) {
         ImGui::EndDisabled();
         ImGui::PopStyleVar();
         tutorial.draw(adcsView,cfdView,console,accessibilityPanel,activeStudioTab);
+        gui::appUpdates().drawNotice(!tutorial.active() && !ImGui::IsPopupOpen(nullptr,ImGuiPopupFlags_AnyPopupId|ImGuiPopupFlags_AnyPopupLevel));
+        if(updateUiSmoke) {
+            auto* notice=ImGui::FindWindowByName("sattrak update available");
+            const bool expected=smokeFrame>9 && smokeFrame<=15;
+            if(bool(notice && notice->Active)!=expected)smokeFailed=true;
+            if(smokeFrame==9)gui::UpdateChecks::notice(gui::appUpdates(),true);
+            if(smokeFrame==15)gui::UpdateChecks::notice(gui::appUpdates(),false);
+        }
         if(tutorialSmoke && smokeFrame%4==3 && !tutorial.targetVisible()) { std::cerr << "Tutorial target missing at step " << tutorial.currentStep()+1 << "\n"; smokeFailed=true; }
         // Render ImGui onto screen
         ImGui::Render();
@@ -538,6 +553,7 @@ int main(int argc, char** argv) {
     glfwDestroyWindow(window);
     glfwTerminate();
 
+    if(!smokeTest)gui::appUpdates().installOnExit();
     std::cout << "[INFO] GUI session terminated cleanly.\n";
     return smokeFailed ? 1 : 0;
 }

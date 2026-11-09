@@ -111,7 +111,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+          sudo apt-get install -y libcurl4-openssl-dev libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
       - name: Configure GUI
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_GUI=ON -DGLFW_BUILD_WAYLAND=OFF
       - name: Build GUI

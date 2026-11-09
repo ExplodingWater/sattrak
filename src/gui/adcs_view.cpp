@@ -1,6 +1,7 @@
 #include "gui/adcs_view.hpp"
 #include "gui/panel_sidebar.hpp"
 #include "gui/tutorial_state.hpp"
+#include "gui/update_checker.hpp"
 #include "gui/slew_profile.hpp"
 #include "gui/numeric_widgets.hpp"
 #include "gui/accessibility.hpp"
@@ -1110,6 +1111,7 @@ void ADCSView::drawSettings() {
         if(ImGui::Button("Restart guided tutorial", ImVec2(-1,28*scale))) tutorialRequested=true;
         ImGui::TextWrapped("Tour every main panel, with a spotlight and step-by-step explanations. Skip or finish at any time.");
         ImGui::TextWrapped("Spacecraft, simulation, sound and satellite data.");
+        appUpdates().drawSettings();
         const char* names[]={"Low poly","Landsat 8","Hubble Space Telescope","Terra","GOES-R","International Space Station"};
         if (ImGui::BeginCombo("Satellite model", names[m_selectedModel])) {
             for(int i=0;i<6;++i) {

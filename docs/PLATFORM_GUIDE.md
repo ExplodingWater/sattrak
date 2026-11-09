@@ -33,7 +33,7 @@ Use a maintained release with a C++20-capable compiler (for example GCC 12 or ne
 
 ```sh
 sudo apt update
-sudo apt install build-essential cmake git pkg-config xorg-dev libgl1-mesa-dev libasound2-dev
+sudo apt install build-essential cmake git pkg-config xorg-dev libgl1-mesa-dev libasound2-dev libcurl4-openssl-dev
 git clone --recurse-submodules https://github.com/ExplodingWater/sattrak.git
 cd sattrak
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_GUI=ON -DGLFW_BUILD_WAYLAND=OFF -DGLFW_BUILD_X11=ON
@@ -56,6 +56,7 @@ For an existing clone, run `git submodule update --init --recursive` before conf
 ## Current platform differences
 
 - Bundled spacecraft, offline satellite data, UI and simulation are the intended cross-platform path. Choose offline data on first launch.
+- App update checks use GitHub on every launch, with WinHTTP on Windows and libcurl on macOS/Linux
 - Online catalog refresh currently uses Windows WinHTTP. macOS/Linux report that online updates are unavailable and fall back to the bundled/saved catalog.
 - Native orbit-file Browse dialogs are currently Windows-only. On macOS/Linux, type a file path into **Primary file** or **Comparison file**, then click Load. Recording **Save As** has a text path field on these systems.
 - Restart the guided tour from **Settings → General → Restart guided tutorial**. Its first-run preference is per user; most older preferences and recording paths are still relative to the launch folder.
