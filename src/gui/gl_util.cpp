@@ -7,6 +7,16 @@
 
 namespace gui {
 
+void setSupportedLineWidth(float requested) {
+    GLint flags=0;glGetIntegerv(GL_CONTEXT_FLAGS,&flags);
+    if(flags&GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT) {
+        glLineWidth(1.0f);
+        return;
+    }
+    GLfloat range[2]{};glGetFloatv(GL_ALIASED_LINE_WIDTH_RANGE,range);
+    glLineWidth(std::clamp(std::isfinite(requested)?requested:1.f,range[0],range[1]));
+}
+
 void Mesh::init(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices) {
     indexCount = static_cast<int>(indices.size());
 

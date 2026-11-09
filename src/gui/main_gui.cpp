@@ -134,6 +134,18 @@ int main(int argc, char** argv) {
     }
     int smokeFrame = 0;
     bool smokeFailed = false;
+    auto smokeCheck = [&](bool passed,const char* label) {
+        if(!passed)std::cerr<<"[SMOKE] "<<label<<" failed at frame "<<smokeFrame<<'\n';
+        smokeFailed |= !passed;
+    };
+    auto smokeGL = [&](const char* stage) {
+        if(!smokeTest)return;
+        for(GLenum error=glGetError();error!=GL_NO_ERROR;error=glGetError()) {
+            std::cerr<<"[SMOKE] OpenGL error 0x"<<std::hex<<error<<std::dec
+                <<" during "<<stage<<" at frame "<<smokeFrame<<'\n';
+            smokeFailed=true;
+        }
+    };
     std::cout << "========================================================\n";
     std::cout << "  sattrak                             \n";
     std::cout << "========================================================\n";
@@ -183,6 +195,13 @@ int main(int argc, char** argv) {
     std::cout << "[INFO] OpenGL Vendor:   " << glGetString(GL_VENDOR) << "\n";
     std::cout << "[INFO] OpenGL Renderer: " << glGetString(GL_RENDERER) << "\n";
     std::cout << "[INFO] OpenGL Version:  " << glGetString(GL_VERSION) << "\n";
+
+    if(smokeTest) {
+        GLfloat widths[2]{};GLint flags=0;
+        glGetFloatv(GL_ALIASED_LINE_WIDTH_RANGE,widths);glGetIntegerv(GL_CONTEXT_FLAGS,&flags);
+        std::cout<<"[INFO] OpenGL line width range: "<<widths[0]<<".."<<widths[1]
+            <<"; forward compatible: "<<bool(flags&GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT)<<'\n';
+    }
 
     // Setup Dear ImGui Context
     IMGUI_CHECKVERSION();
@@ -235,7 +254,8 @@ int main(int argc, char** argv) {
     });
     if (smokeTest) {
         adcsView.setCameraPreset(gui::CameraPreset::FreeOrbitArcball);
-        smokeFailed |= !gui::ADCSViewChecks::run(adcsView);
+        smokeCheck(gui::ADCSViewChecks::run(adcsView),"Initial scene checks");
+        smokeGL("scene initialization");
     }
 
     gui::CFDView cfdView;
@@ -252,13 +272,13 @@ int main(int argc, char** argv) {
     adcsView.attachAudio(musicPlayer);
     if (smokeTest) {
         musicPlayer.setVolumePercent(250);
-        smokeFailed |= musicPlayer.volumePercent() != 200;
+        smokeCheck(musicPlayer.volumePercent()==200,"Music volume clamp");
         musicPlayer.setVolumePercent(100);
         if(musicPlayer.hasTracks()) {
             musicPlayer.togglePause();
-            smokeFailed |= !musicPlayer.isPlaying();
+            smokeCheck(musicPlayer.isPlaying(),"Music playback start");
             musicPlayer.togglePause();
-            smokeFailed |= musicPlayer.isPlaying();
+            smokeCheck(!musicPlayer.isPlaying(),"Music pause");
         }
     }
 
@@ -496,6 +516,7 @@ int main(int argc, char** argv) {
             if(orbitSmoke)smokeFailed |= !gui::ADCSViewChecks::checkOrbitFrame(adcsView,smokeFrame);
             if (smokeTest && !tutorialSmoke && !brandingCapture && !accessibilitySmoke && !catalogSmoke && !displaySmoke && !consoleSmoke && !startupSmoke && !orbitSmoke && !modelSmoke && !multiSmoke) smokeFailed |= !gui::ADCSViewChecks::checkRouting(adcsView, smokeFrame);
             adcsView.renderViews(window,dt);
+            smokeGL("orbital scene rendering");
             adcsView.drawAltimeters();
         } else {
             adcsView.closeDesktopViews();
@@ -546,7 +567,7 @@ int main(int argc, char** argv) {
             const char* panels[] = {"GNC & Orbital Telemetry", "Live Strip-Charts (ImPlot)", "Flight Director & Camera", "2D Ground Track (ECEF)"};
             for (int i = 0; !tutorialSmoke && !brandingCapture && activeStudioTab == 0 && i < 4; ++i) {
                 ImGuiWindow* panel = ImGui::FindWindowByName(panels[i]);
-                if (!panel) { smokeFailed=true; continue; }
+                if (!panel) { smokeCheck(false,panels[i]); continue; }
                 float edge = i < 2 ? panel->Pos.x - gui::panelSidebarWidth() : io.DisplaySize.x - panel->Pos.x - panel->Size.x - (gui::panelPlacement==4?64*uiScale:0);
                 if (std::abs(edge - 10.0f) > 1.0f || panel->Pos.y + panel->Size.y > io.DisplaySize.y + 1) {
                     std::cerr << "Panel bounds failed: " << panels[i] << "\n";
@@ -562,7 +583,7 @@ int main(int argc, char** argv) {
                 for (int y = windowHeight-1; y >= 0; --y)
                     shot.write(reinterpret_cast<const char*>(pixels.data() + y*windowWidth*3), windowWidth*3);
             }
-            if (glGetError() != GL_NO_ERROR) smokeFailed = true;
+            smokeGL("frame rendering");
             if (++smokeFrame == (tutorialSmoke?gui::Tutorial::totalSteps*4:20)) glfwSetWindowShouldClose(window, GLFW_TRUE);
         }
         glfwSwapBuffers(window);

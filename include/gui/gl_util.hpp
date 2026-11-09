@@ -177,6 +177,9 @@ Mesh createCylinderMesh(float radiusBottom, float radiusTop, float height, int s
 Mesh createQuadMesh();
 
 unsigned int loadTextureFromFile(const std::string& path);
+// Forward-compatible core contexts prohibit wide lines even if the driver
+// advertises a wider rasterization range.
+void setSupportedLineWidth(float requested);
 unsigned int createDynamicRGBATexture(int width, int height);
 void updateDynamicRGBATexture(unsigned int texId, int width, int height, const unsigned char* data);
 

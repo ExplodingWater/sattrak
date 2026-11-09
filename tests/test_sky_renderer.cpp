@@ -26,6 +26,15 @@ int main(int argc,char** argv) {
     if(!sky.init(argv[1]))return 1;
     int failures=0;
     auto check=[&](bool value,const char* message){if(!value){std::cerr<<message<<'\n';++failures;}};
+    // A real forward-compatible Mac context used to reject the tracking beam's
+    // 2.5px line width with GL_INVALID_VALUE on every scene frame.
+    gui::setSupportedLineWidth(2.5f);
+    check(glGetError()==GL_NO_ERROR,"Tracking line width must be valid in this context");
+    GLint contextFlags=0;glGetIntegerv(GL_CONTEXT_FLAGS,&contextFlags);
+    GLfloat lineWidth=0;glGetFloatv(GL_LINE_WIDTH,&lineWidth);
+    if(contextFlags&GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT)
+        check(lineWidth==1.f,"Forward-compatible context requires a one-pixel tracking line");
+    gui::setSupportedLineWidth(1.f);
     const auto projection=gui::Mat4::perspective(1.4f,float(width)/height,.1f,1000);
     const auto vp=gui::Mat4::multiply(projection,gui::Mat4::lookAt({},gui::skyDirection(83,0),{0,1,0}));
     auto render=[&](const gui::SkySettings& settings) {

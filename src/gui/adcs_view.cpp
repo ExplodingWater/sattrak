@@ -847,7 +847,7 @@ void ADCSView::render3D(int width, int height) {
         m_lineShader.setVec4("uColor", 0.94f, 0.27f, 0.27f, 0.85f); // Red
     }
 
-    glLineWidth(2.5f);
+    setSupportedLineWidth(2.5f);
     glBindVertexArray(m_lineVao);
     glDrawArrays(GL_LINES, 0, 2);
     glBindVertexArray(0);

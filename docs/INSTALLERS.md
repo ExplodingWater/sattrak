@@ -13,10 +13,24 @@ architecture, which can be misleading under Rosetta.
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
-  -DSATTRAK_RELEASE_VERSION=1.0.0-preview.20261109
+  -DSATTRAK_RELEASE_VERSION=1.0.0-preview.20261109.1
 cmake --build build --parallel 4
 ctest --test-dir build --output-on-failure
 ```
+
+For release validation on a Mac or Debian graphical desktop with working audio:
+
+```sh
+cmake --build build --target gui_checks
+```
+
+This runs 15 graphical checks, including the scene, both tutorial sizes, camera
+interaction, spacecraft depth, replay, console, sky and update notices. Logs,
+captures and `summary.json` are written under `build/gui-checks`. Failures include
+OpenGL error codes and the rendering stage. These checks stay separate from
+headless CTest and do not switch monitor modes by default. The optional
+`--include-display` flag to `tests/run_gui_checks.py` also tests monitor-mode
+transitions and should be used when temporary display changes are acceptable.
 
 On macOS:
 
@@ -87,8 +101,13 @@ delete old source-build data.
 
 Default builds are for development/testing: code is signed ad hoc and the PKG is
 unsigned. They are not notarized, so they are not yet a public Gatekeeper-ready
-release. No quarantine attributes are removed or bypassed by the installer.
-For public distribution, configure your own Developer ID identities:
+release. An explicitly labeled unnotarized preview can still be distributed.
+macOS may block the installer or first launch; users who trust the download may
+be able to approve that specific item through System Settings → Privacy & Security
+→ Open Anyway. Managed computers can restrict this option. No quarantine
+attributes are removed or bypassed by the installer. See [Apple's opening-app guidance](https://support.apple.com/en-us/102445)
+
+To sign and notarize a later release, configure your own Developer ID identities:
 
 ```sh
 cmake -S . -B build \

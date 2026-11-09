@@ -3,7 +3,7 @@ project(sattrak VERSION 1.0.0 LANGUAGES C CXX DESCRIPTION "Spacecraft Dynamics a
 if(APPLE)
     enable_language(OBJCXX)
 endif()
-set(SATTRAK_RELEASE_VERSION "1.0.0-preview.20261103" CACHE STRING "Release tag version used by the update checker")
+set(SATTRAK_RELEASE_VERSION "1.0.0-preview.20261109.1" CACHE STRING "Release tag version used by the update checker")
 if(NOT SATTRAK_RELEASE_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+[-+A-Za-z0-9.]*$")
     message(FATAL_ERROR "SATTRAK_RELEASE_VERSION must be a semantic release version")
 endif()
@@ -248,6 +248,14 @@ if(BUILD_GUI)
         src/gui/sky_catalog.cpp src/gui/sky_renderer.cpp src/gui/gl_util.cpp external/glad/src/glad.c)
     target_include_directories(test_sky_renderer SYSTEM PRIVATE external/glad/include external/stb)
     target_link_libraries(test_sky_renderer PRIVATE glfw OpenGL::GL)
+    if(UNIX AND Python3_Interpreter_FOUND)
+        # Opt in explicitly from a real desktop; ordinary CTest stays headless.
+        add_custom_target(gui_checks
+            COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/run_gui_checks.py"
+                --binary "$<TARGET_FILE:ag>" --sky-renderer "$<TARGET_FILE:test_sky_renderer>"
+                --source-root "${PROJECT_SOURCE_DIR}" --output "${PROJECT_BINARY_DIR}/gui-checks"
+            DEPENDS ag test_sky_renderer USES_TERMINAL VERBATIM)
+    endif()
     add_executable(test_radio_player tests/test_radio_player.cpp src/gui/music_player.cpp src/gui/alarm_audio.cpp src/gui/radio_commands.cpp)
     add_executable(test_research_catalog tests/test_research_catalog.cpp src/gui/research_catalog.cpp)
     target_link_libraries(test_research_catalog PRIVATE sattrak_sgp4)
