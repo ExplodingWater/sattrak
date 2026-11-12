@@ -41,7 +41,7 @@ if(ISCC_EXECUTABLE)
         COMMAND "${ISCC_EXECUTABLE}"
             "/DSourceDir=${PROJECT_BINARY_DIR}/installer-stage/$<CONFIG>"
             "/DOutputDir=${PROJECT_BINARY_DIR}/installer"
-            "/DAppVersion=${PROJECT_VERSION}"
+            "/DAppVersion=${SATTRAK_RELEASE_VERSION}"
             "/DAudioHelper=$<TARGET_FILE:sattrak_installer_audio>"
             "${PROJECT_SOURCE_DIR}/packaging/windows/sattrak.iss"
         DEPENDS ag sattrak_installer_audio sattrak_updater USES_TERMINAL VERBATIM

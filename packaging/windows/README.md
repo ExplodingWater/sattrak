@@ -7,7 +7,7 @@ cmake -S . -B build -DBUILD_GUI=ON
 cmake --build build --config Release --target windows_installer --parallel
 ```
 
-If the compiler is not found automatically, set `-DISCC_EXECUTABLE="C:/path/to/ISCC.exe"` during configuration. The output is `build/installer/sattrak-1.0.0-windows-x64-setup.exe` (version follows the CMake project version).
+If the compiler is not found automatically, set `-DISCC_EXECUTABLE="C:/path/to/ISCC.exe"` during configuration. The output is `build/installer/sattrak-VERSION-windows-x64-setup.exe`, using `SATTRAK_RELEASE_VERSION` for `VERSION`.
 
 CMake stages only the application, bundled assets, texture, license, terms, and detected release MSVC runtime DLLs. Preferences, developer tools, and test outputs are not staged. A portable runtime can also be staged with `cmake --install build --config Release --component Runtime --prefix build/portable`.
 

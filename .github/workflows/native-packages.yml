@@ -1,4 +1,5 @@
 name: Native update packages
+run-name: Package sattrak ${{ inputs.version }}
 
 # Build reviewable artifacts. Publishing a GitHub release remains a separate step.
 on:
@@ -11,6 +12,44 @@ on:
 permissions:
   contents: read
 jobs:
+  windows:
+    runs-on: windows-latest
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Build Windows installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $iscc)) {
+            choco install innosetup --version=6.7.1 --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          cmake -S . -B build -A x64 "-DISCC_EXECUTABLE=$iscc" "-DSATTRAK_RELEASE_VERSION=$env:RELEASE_VERSION"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build --config Release --target windows_installer --parallel 3
+      - name: Verify silent installation
+        shell: pwsh
+        run: |
+          $setup = Get-Item "build/installer/sattrak-${env:RELEASE_VERSION}-windows-x64-setup.exe"
+          $target = Join-Path $env:RUNNER_TEMP 'sattrak install smoke'
+          $process = Start-Process $setup.FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=`"$target`"" -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Setup exited with $($process.ExitCode)" }
+          if ((Get-Content "$target/release-version.txt" -Raw).Trim() -ne $env:RELEASE_VERSION) {
+            throw 'Installed release version does not match the package'
+          }
+          Get-Item "$target/sattrak_updater.exe", "$target/assets/sky" | Out-Null
+          $process = Start-Process "$target/ag.exe" -ArgumentList '--update-smoke-test' -WorkingDirectory $target -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Installed update checks exited with $($process.ExitCode)" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-windows-X64
+          path: build/installer/*-setup.exe
+          compression-level: 0
+          if-no-files-found: error
   macos:
     strategy:
       fail-fast: false
@@ -56,7 +95,7 @@ jobs:
       - name: Install build dependencies
         run: |
           apt-get update
-          apt-get install -y git ca-certificates build-essential cmake python3 libcurl4-openssl-dev libgl1-mesa-dev xorg-dev libasound2-dev passwd util-linux dpkg-dev desktop-file-utils
+          apt-get install -y git ca-certificates build-essential cmake python3 libcurl4-openssl-dev libgl1-mesa-dev xorg-dev libasound2-dev passwd util-linux dpkg-dev desktop-file-utils xvfb xauth pulseaudio
       - uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -75,6 +114,16 @@ jobs:
           apt-get install -y ./build/installers/*.deb
           desktop-file-validate /usr/share/applications/sattrak.desktop
           runuser -u sattrak-test -- env SATTRAK_USER_INSTALL_ROOT="$GITHUB_WORKSPACE/build/debian-install-smoke" /usr/bin/sattrak --native-install-info
+      - name: Verify Debian graphics and audio with a virtual desktop
+        timeout-minutes: 15
+        run: |
+          runuser -u sattrak-test -- env SATTRAK_USER_INSTALL_ROOT="$GITHUB_WORKSPACE/build/debian-install-smoke" bash -eu -c '
+            export XDG_RUNTIME_DIR=$(mktemp -d)
+            pulseaudio --daemonize=yes --exit-idle-time=-1 -n -L module-native-protocol-unix -L module-null-sink
+            trap '\''pulseaudio --kill; rm -rf "$XDG_RUNTIME_DIR"'\'' EXIT
+            xvfb-run -a -s "-screen 0 1920x1080x24" /usr/bin/sattrak --startup-smoke-test
+            xvfb-run -a -s "-screen 0 1920x1080x24" cmake --build build --target gui_checks
+          '
       - uses: actions/upload-artifact@v4
         with:
           name: native-debian-${{ runner.arch }}
