@@ -52,7 +52,7 @@ On Debian 12+ (amd64 or arm64):
 sudo apt-get install build-essential cmake python3 dpkg-dev desktop-file-utils \
   libcurl4-openssl-dev libgl1-mesa-dev xorg-dev libasound2-dev
 cmake --build build --target debian_installer
-sudo apt install ./build/installers/sattrak-1.0.0-preview.20261109-debian-amd64.deb
+sudo apt install ./build/installers/sattrak-1.0.0-preview.20261109.1-debian-amd64.deb
 ```
 
 Use the arm64 filename on an arm64 machine. The `.deb` includes `/usr/bin/sattrak`,
@@ -135,11 +135,12 @@ after stapling, since stapling changes container bytes.
 
 ## CI and validation
 
-The **Native update packages** workflow builds/tests installers and update archives
-for Apple Silicon, Intel Mac, Debian amd64 and Debian arm64. Debian jobs install
-the resulting package in an isolated container, validate its desktop entry, and
-launch its native diagnostic as a normal user. macOS jobs verify the app signature
-and disk image. The workflow uploads artifacts without publishing a GitHub release.
+The **Native update packages** workflow builds the Windows x64 setup and native
+installers and update archives for Apple Silicon, Intel Mac, Debian amd64 and
+Debian arm64. It checks a silent Windows install and verifies the Mac app signature
+and disk image. The Debian jobs install the `.deb`, validate its desktop entry and
+run the graphics and audio checks as a normal user with a virtual display and audio
+sink. The workflow uploads artifacts for review before release publication.
 
 CTest covers native launcher first launch, state preservation, update-helper lock
 handoff, installer upgrades, refusing unmanaged folders and avoiding downgrades,

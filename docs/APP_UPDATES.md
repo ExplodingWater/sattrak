@@ -94,10 +94,9 @@ automatic installation first if you want to keep using the older version.
 ## Publishing native update assets
 
 Run **Native update packages** (`.github/workflows/native-packages.yml`) with the
-intended semantic version. It builds/tests four architectures and uploads reviewable
-artifacts; it does not publish or push a release. Before publishing, test each
-package on its target OS. This change was locally validated on macOS; Debian
-runtime verification must be performed on a Debian machine or in the workflow.
+intended semantic version. It builds the Windows x64 installer and the Mac and
+Debian installers and update archives, then uploads them for review. Debian
+jobs check the installed package on Debian 12 with a virtual display and audio sink.
 
 Upload the corresponding archives to the official GitHub release:
 
@@ -134,7 +133,7 @@ Turning automatic installation off also prevents a staged update from running wh
 
 ## Release versions
 
-The current source baseline is `1.0.0-preview.20261103`
+The current source baseline is `1.0.0-preview.20261109.1`
 
 Set `SATTRAK_RELEASE_VERSION` to match the release tag when building a new release
 

@@ -2,16 +2,15 @@
 
 # sattrak
 
-- **[Download for Windows](https://github.com/ExplodingWater/sattrak/releases/download/v1.0.0-preview.20261103/sattrak-1.0.0-windows-x64-setup.exe)**
-- **[Download for macOS: Apple Silicon](https://github.com/ExplodingWater/sattrak/actions/runs/42683103935/artifacts/13702319382)**
-- **[Download for macOS: Intel](https://github.com/ExplodingWater/sattrak/actions/runs/42683103935/artifacts/13703494444)**
-- **[Download for Debian: amd64](https://github.com/ExplodingWater/sattrak/actions/runs/42683103935/artifacts/13704410335)**
-- **[Download for Debian: arm64](https://github.com/ExplodingWater/sattrak/actions/runs/42683103935/artifacts/13703493429)**
-- [Windows release notes](https://github.com/ExplodingWater/sattrak/releases/tag/v1.0.0-preview.20261103)
-- [macOS and Debian build details](https://github.com/ExplodingWater/sattrak/actions/runs/42683103935)
+- **[Download for Windows x64](https://github.com/ExplodingWater/sattrak/releases/download/v1.0.0-preview.20261109.1/sattrak-1.0.0-preview.20261109.1-windows-x64-setup.exe)**
+- **[Download for macOS Apple Silicon](https://github.com/ExplodingWater/sattrak/releases/download/v1.0.0-preview.20261109.1/sattrak-1.0.0-preview.20261109.1-macos-arm64.dmg)**
+- **[Download for macOS Intel](https://github.com/ExplodingWater/sattrak/releases/download/v1.0.0-preview.20261109.1/sattrak-1.0.0-preview.20261109.1-macos-x64.dmg)**
+- **[Download for Debian amd64](https://github.com/ExplodingWater/sattrak/releases/download/v1.0.0-preview.20261109.1/sattrak-1.0.0-preview.20261109.1-debian-amd64.deb)**
+- **[Download for Debian arm64](https://github.com/ExplodingWater/sattrak/releases/download/v1.0.0-preview.20261109.1/sattrak-1.0.0-preview.20261109.1-debian-arm64.deb)**
+- [Preview release notes and checksums](https://github.com/ExplodingWater/sattrak/releases/tag/v1.0.0-preview.20261109.1)
 - [Screenshot tutorial](docs/TUTORIAL.md)
 
-macOS and Debian downloads are preview-build ZIPs and require GitHub sign-in. Open the `installers/` folder inside the ZIP for the DMG/PKG or DEB installer. These artifacts expire on 7 February 2027; permanent release downloads have not been published yet. Mac previews are development-signed and not notarized. See the [installation guide](docs/INSTALLERS.md)
+These installers are development previews. The Mac builds are unnotarized and may require approval in Privacy & Security. See the [installation guide](docs/INSTALLERS.md)
 
 The Windows preview includes the branded installation wizard, bundled models and offline satellite catalog. Install for your Windows account, then follow the guided first-run tutorial. Restart it any time from **Settings → General → Restart guided tutorial**.
 
