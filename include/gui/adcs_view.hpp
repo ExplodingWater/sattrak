@@ -66,7 +66,7 @@ enum class CameraPreset {
     SolarWing,          // Solar array wingtip view
     GroundStationPOV,   // Standing on Earth looking up at satellite
     OrbitalPlane,       // High orbit normal plane overview
-    SunEarthEcliptic    // Sunward vantage point
+    SunEarthEcliptic   // Sunward vantage point
 };
 
 class ADCSView {
@@ -238,6 +238,7 @@ private:
 
     void setRealScale(bool enabled);
     double spacecraftScale() const;
+    Mat4 spacecraftRotation() const { return Mat4::fromQuaternion(m_satState.q); }
     bool satelliteHiddenByEarth() const;
     bool m_realScale = false;
     bool m_openSettings = false;
@@ -259,6 +260,9 @@ private:
     ShaderProgram m_shader3D;
     ShaderProgram m_lineShader;
     ShaderProgram m_atmosphereShader;
+    ShaderProgram m_sunShader;
+    float m_sunGlare=1.0f;
+    aero::math::Vec3 m_boresightECI{0,0,1};
     SkyRenderer m_sky;
     SkySettings m_skySettings;
     double m_skyEpochUtc = 0;
@@ -275,6 +279,9 @@ private:
     Mesh m_dishMesh;
     Mesh m_beaconMesh;
     unsigned int m_earthTexId = 0;
+    bool m_fullscreenMap = false;
+    float m_mapZoom = 1.0f, m_mapPanX = 0.0f, m_mapPanY = 0.0f;
+    int m_mapSelection = 0;
 
     unsigned int m_lineVao = 0;
     unsigned int m_lineVbo = 0;

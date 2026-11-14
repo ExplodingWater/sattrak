@@ -107,10 +107,11 @@ int main(int argc, char** argv) {
     if(argc>1 && std::strcmp(argv[1],"--check-updates")==0)return gui::UpdateChecker::commandLineCheck();
     if(argc>1 && std::strcmp(argv[1],"--download-update-test")==0)return gui::UpdateChecker::downloadTest();
     if(argc>1 && std::strcmp(argv[1],"--update-smoke-test")==0)return gui::UpdateChecks::run();
+    const bool environmentSmoke=argc>1 && std::strcmp(argv[1],"--environment-smoke-test")==0;
     const bool updateUiSmoke=argc>1 && std::strcmp(argv[1],"--update-ui-smoke-test")==0;
     const bool tutorialSmoke = argc > 1 && std::strcmp(argv[1], "--tutorial-smoke-test") == 0;
     const bool tutorialCompact = tutorialSmoke && argc > 2 && std::strcmp(argv[2], "--compact") == 0;
-    const bool brandingCapture = argc > 1 && std::strcmp(argv[1], "--capture-branding") == 0;
+    const bool brandingCapture = environmentSmoke || (argc > 1 && std::strcmp(argv[1], "--capture-branding") == 0);
     const bool accessibilitySmoke = argc > 1 && std::strcmp(argv[1], "--accessibility-smoke-test") == 0;
     const bool multiSmoke = argc > 1 && std::strcmp(argv[1], "--multiview-smoke-test") == 0;
     const bool issDepthSmoke = argc > 1 && std::strcmp(argv[1], "--iss-depth-smoke-test") == 0;
@@ -500,7 +501,8 @@ int main(int argc, char** argv) {
             glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Deep Space Black
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-            if(brandingCapture)gui::ADCSViewChecks::prepareBrandingFrame(adcsView,smokeFrame);
+            if(environmentSmoke)gui::ADCSViewChecks::prepareEnvironmentFrame(adcsView,smokeFrame);
+            else if(brandingCapture)gui::ADCSViewChecks::prepareBrandingFrame(adcsView,smokeFrame);
             else if(interactionSmoke)gui::InteractionChecks::prepare(adcsView,smokeFrame);
             else if(catalogSmoke)gui::ADCSViewChecks::prepareCatalogFrame(adcsView,smokeFrame);
             else if(orbitSmoke)gui::ADCSViewChecks::prepareOrbitFrame(adcsView,smokeFrame);
@@ -516,6 +518,7 @@ int main(int argc, char** argv) {
             if(orbitSmoke)smokeFailed |= !gui::ADCSViewChecks::checkOrbitFrame(adcsView,smokeFrame);
             if (smokeTest && !tutorialSmoke && !brandingCapture && !accessibilitySmoke && !catalogSmoke && !displaySmoke && !consoleSmoke && !startupSmoke && !orbitSmoke && !modelSmoke && !multiSmoke) smokeFailed |= !gui::ADCSViewChecks::checkRouting(adcsView, smokeFrame);
             adcsView.renderViews(window,dt);
+            if(environmentSmoke)smokeFailed |= !gui::ADCSViewChecks::checkEarthRendering(adcsView,smokeFrame);
             smokeGL("orbital scene rendering");
             adcsView.drawAltimeters();
         } else {
@@ -549,7 +552,8 @@ int main(int argc, char** argv) {
         if(tutorialSmoke && smokeFrame%4==3 && !tutorial.targetVisible()) { std::cerr << "Tutorial target missing at step " << tutorial.currentStep()+1 << "\n"; smokeFailed=true; }
         // Render ImGui onto screen
         ImGui::Render();
-        if(!brandingCapture)ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        if(!brandingCapture || (environmentSmoke && smokeFrame==18))
+            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         if(interfaceSmoke) {
             auto* strip=ImGui::FindWindowByName("Orbital panels");
@@ -574,7 +578,8 @@ int main(int argc, char** argv) {
                     smokeFailed = true;
                 }
             }
-            if ((tutorialSmoke && smokeFrame%4==3) || smokeFrame == 3 || smokeFrame == 7 || smokeFrame == 11 || smokeFrame == 15 || smokeFrame == 19) {
+            if ((tutorialSmoke && smokeFrame%4==3) || (environmentSmoke && smokeFrame==18)
+                || smokeFrame == 3 || smokeFrame == 7 || smokeFrame == 11 || smokeFrame == 15 || smokeFrame == 19) {
                 std::vector<unsigned char> pixels(windowWidth * windowHeight * 3);
                 glPixelStorei(GL_PACK_ALIGNMENT, 1);
                 glReadPixels(0, 0, windowWidth, windowHeight, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());

@@ -1,11 +1,48 @@
 #pragma once
 #include "gui/adcs_view.hpp"
+#include "gui/solar_environment.hpp"
 #include <iostream>
 #include "imgui_internal.h"
 
 namespace gui {
 // Invoked by --smoke-test while a real OpenGL context is active.
 struct ADCSViewChecks {
+    static void prepareEnvironmentFrame(ADCSView& view,int frame) {
+        view.m_isPaused=true;view.m_hudVisible=false;view.m_showAltimeters=false;
+        view.m_showResearch=false;view.m_showTrail=false;view.setMarkerOpacity(0);
+        view.m_skyEpochUtc=946728000;view.m_simTimeSec=0;
+        const auto sun=solarEnvironment(view.m_skyEpochUtc).direction;
+        const auto tangent=sun.cross({0,1,0}).normalized();
+        view.m_camPreset=CameraPreset::FreeFlycam;
+        view.m_cameraFov=45;
+        view.m_flycamPos=frame<4?sun*30:frame<8?-sun*30:frame<12?-sun*30+tangent*13:sun*20+tangent*20;
+        view.m_flyForward=frame<4?sun:frame<12?sun:-view.m_flycamPos.normalized();
+        view.m_flyUp={0,1,0};view.computeLineOfSight();
+        view.m_fullscreenMap=frame==18;
+        if(frame>=16) {
+            view.m_flycamPos=sun*11.9;
+            view.m_flyForward=sun;
+            view.m_hudVisible=true;
+            view.m_skySettings.lines=true;
+            view.m_skySettings.labels=true;
+            view.m_showResearch=true;
+            view.m_researchUnlocked=true;
+        }
+    }
+    static bool checkEarthRendering(ADCSView& view,int frame) {
+        if(frame!=18 && frame!=19)return true;
+        unsigned char pixel[4]{};
+        glReadPixels(0,0,1,1,GL_RGBA,GL_UNSIGNED_BYTE,pixel);
+        const bool underground=view.cameraAltitudeKm()<0 && pixel[0]>=3 && pixel[0]<=5
+            && pixel[1]>=4 && pixel[1]<=6 && pixel[2]>=6 && pixel[2]<=8;
+        const auto* map=ImGui::FindWindowByName(frame==18?"Earth-fixed map##fullscreen":"2D Ground Track (ECEF)");
+        if(map && view.m_earthTexId && underground) {
+            for(const auto& cmd:map->DrawList->CmdBuffer)
+                if(cmd.ElemCount && cmd.GetTexID()==(ImTextureID)(intptr_t)view.m_earthTexId)return true;
+        }
+        std::cerr<<"Underground framebuffer or ECEF map texture check failed\n";
+        return false;
+    }
     static void prepareCatalogFrame(ADCSView& view,int frame) {
         view.m_showResearch=true;view.m_researchUnlocked=true;view.m_showCatalogStations=true;view.m_includeOfflineStations=true;
         view.m_camPreset=CameraPreset::FreeOrbitArcball;view.m_arcballDist=42;
@@ -177,6 +214,28 @@ struct ADCSViewChecks {
         return passed;
     }
     static bool run(ADCSView& view) {
+        if(!view.m_realScale || view.m_timeWarp!=1 || view.m_earthSpinWarp!=1) {
+            std::cerr<<"Startup must use 1:1 scale and real time\n";return false;
+        }
+        {
+            const auto saved=view.m_satState.q;
+            for(const auto& axis:std::array<aero::math::Vec3,4>{{{1,0,0},{0,1,0},{0,0,1},{1,2,3}}}) {
+                view.m_satState.q=aero::adcs::Quaternion::fromRotationVector(axis.normalized()*1.2);
+                view.computeLineOfSight();
+                const auto expected=view.m_satState.q.rotateInverse({0,0,1});
+                const auto model=view.spacecraftRotation();
+                const aero::math::Vec3 renderedAxis{model.m[8],model.m[9],model.m[10]};
+                if((renderedAxis-expected).norm()>1e-6){std::cerr<<"Rendered payload disagrees with boresight\n";return false;}
+                if((view.m_boresightECI-expected).norm()>1e-10)return false;
+                const auto delta=(view.m_targetPosECI-view.m_muzzlePosECI).normalized();
+                const auto error=std::acos(std::clamp(expected.dot(delta),-1.0,1.0))*180/3.141592653589793;
+                if(std::abs(error-view.m_slewErrorDeg)>1e-8)return false;
+            }
+            view.m_satState.q=saved;view.computeLineOfSight();
+            view.setRealScale(false);
+            if(view.m_timeWarp!=5 || view.spacecraftScale()!=1)return false;
+            view.setRealScale(true);
+        }
         const int expectedTriangles[]={21129,117120,93121,247547};
         for(int i=0;i<4;++i) {
             int count=0;
@@ -273,10 +332,11 @@ struct ADCSViewChecks {
         view.m_camPreset = CameraPreset::ChaseCam;
         view.moveFlycam(1, 0, 0, false, 0.5);
         check(view.m_camPreset == CameraPreset::FreeFlycam, "WASD enters flight from a preset");
-        check(std::abs((view.m_flycamPos-view.m_cameraEye).norm()-7.0) < 1e-8, "W advances at configured speed");
+        const double expectedTravel=view.m_userSpeedKmS*(12.0/6378.137)*0.5;
+        check(std::abs((view.m_flycamPos-view.m_cameraEye).norm()-expectedTravel) < 1e-8, "W advances at configured physical speed");
         view.m_flycamPos = {0,0,0};
         view.moveFlycam(1,1,0,false,0.5);
-        check(std::abs(view.m_flycamPos.norm()-7.0) < 1e-8, "diagonal speed is normalized");
+        check(std::abs(view.m_flycamPos.norm()-expectedTravel) < 1e-8, "diagonal speed is normalized");
         {
             ADCSView normal, faster;
             normal.setRealScale(true); faster.setRealScale(true);

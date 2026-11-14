@@ -1,4 +1,6 @@
 #include "gui/adcs_view.hpp"
+#include "gui/solar_environment.hpp"
+#include "gui/solar_shader.hpp"
 #include "gui/panel_sidebar.hpp"
 #include "gui/tutorial_state.hpp"
 #include "gui/update_checker.hpp"
@@ -132,13 +134,13 @@ uniform vec4 uColor;
 uniform vec3 uSunDir;
 uniform vec3 uViewPos;
 uniform float uRoughness;
-uniform bool uLocalDepth;
+uniform float uSunlight;
 
 void main() {
-    // Perspective depth loses precision when the camera enters a large model's
-    // bounding sphere. Logarithmic fragment depth retains thin surface layers
-    // even with a millimeter near plane. gl_FragCoord.w is the reciprocal eye depth.
-    gl_FragDepth = uLocalDepth ? log2(1.0 + 1.0 / gl_FragCoord.w) / log2(1.0 + 1.0e10) : gl_FragCoord.z;
+    // Keep depth comparable across the globe, catalog and spacecraft shaders
+    // Logarithmic depth keeps separation at the surface with a close near plane
+    // gl_FragCoord.w is the reciprocal eye depth
+    gl_FragDepth = log2(1.0 + 1.0 / gl_FragCoord.w) / log2(1.0 + 1.0e10);
     vec3 norm = normalize(vNormal);
     vec3 lightDir = normalize(uSunDir);
 
@@ -146,7 +148,7 @@ void main() {
     vec3 ambient = ambientStrength * vec3(0.12, 0.18, 0.28);
 
     float diff = max(dot(norm, lightDir), 0.0);
-    vec3 diffuse = diff * vec3(1.0, 0.98, 0.92);
+    vec3 diffuse = diff * vec3(1.0, 0.98, 0.92) * uSunlight;
 
     vec3 viewDir = normalize(uViewPos - vFragPos);
     vec3 reflectDir = reflect(-lightDir, norm);
@@ -156,7 +158,7 @@ void main() {
     vec4 baseColor = uUseTexture ? texture(uTexture, vTexCoords) : uColor;
     if(baseColor.a<0.1)discard;
     float ocean = uUseTexture ? smoothstep(0.0, 0.12, baseColor.b - max(baseColor.r, baseColor.g)) : 1.0;
-    vec3 result = (ambient + diffuse) * baseColor.rgb + specular * ocean * max(dot(norm, lightDir), 0.0);
+    vec3 result = (ambient + diffuse) * baseColor.rgb + specular * ocean * max(dot(norm, lightDir), 0.0) * uSunlight;
     FragColor = vec4(result, baseColor.a);
 }
 )";
@@ -175,16 +177,15 @@ static const char* fragmentShaderLine = R"(
 #version 330 core
 out vec4 FragColor;
 uniform vec4 uColor;
-uniform bool uLocalDepth;
 
 void main() {
-    gl_FragDepth = uLocalDepth ? log2(1.0 + 1.0 / gl_FragCoord.w) / log2(1.0 + 1.0e10) : gl_FragCoord.z;
+    gl_FragDepth = log2(1.0 + 1.0 / gl_FragCoord.w) / log2(1.0 + 1.0e10);
     FragColor = uColor;
 }
 )";
 
 
-static const char* atmosphereFragment = R"( // Oh My God Bruh
+static const char* atmosphereFragment = R"(
 #version 330 core
 in vec3 vFragPos;
 out vec4 FragColor;
@@ -223,7 +224,8 @@ void main() {
         scattering += density * stepSize * exp(-beta*(depth+sunDepth));
     }
     float mu = dot(ray, sun);
-    vec3 color = scattering * beta * (0.75*(1.0+mu*mu)) * 0.8;
+    float mie=0.035*(1.0-0.76*0.76)/pow(max(1.0+0.76*0.76-2.0*0.76*mu,0.01),1.5);
+    vec3 color = scattering * (beta*(0.75*(1.0+mu*mu))+vec3(mie)) * 0.8;
     FragColor = vec4(color, 1.0);
 }
 )";
@@ -257,6 +259,7 @@ bool ADCSView::init() {
     if (!m_shader3D.loadFromSource(vertexShader3D, fragmentShader3D)) return false;
     if (!m_lineShader.loadFromSource(vertexShaderLine, fragmentShaderLine)) return false;
     if (!m_atmosphereShader.loadFromSource(vertexShader3D, atmosphereFragment)) return false;
+    if (!m_sunShader.loadFromSource(solarVertex, solarFragment)) return false;
     const char* photos[] = {"cape", "houston", "london", "tokyo", "sydney", "svalbard", "kourou"};
     for (size_t i = 0; i < m_stations.size(); ++i) {
         m_stations[i].texture = loadTextureFromFile(std::string("assets/stations/") + photos[i] + ".jpg");
@@ -313,11 +316,12 @@ bool ADCSView::init() {
     glEnableVertexAttribArray(0);
     glBindVertexArray(0);
 
+    setRealScale(true);
     return true;
 }
 
 void ADCSView::handleInput(GLFWwindow* window, float dt) {
-    if(tutorialRunning) {
+    if(tutorialRunning || m_fullscreenMap) {
         glfwSetInputMode(window,GLFW_CURSOR,GLFW_CURSOR_NORMAL);
         m_isRightClickDragging=m_isLeftClickDragging=false;
         return;
@@ -458,9 +462,12 @@ void ADCSView::computeLineOfSight() {
         -tgtECEF[0] * sE + tgtECEF[2] * cE
     );
 
-    // Muzzle position in ECI (+Z = 1.15 in body frame)
-    aero::math::Vec3 muzzleBody(0.0, 0.0, 1.15 * spacecraftScale());
+    // The procedural telescope has a known aperture, imported assets lack sensor metadata
+    aero::math::Vec3 muzzleBody(0.0, 0.0, (m_selectedModel==0?1.15:0.0) * spacecraftScale());
     m_muzzlePosECI = m_satPosECI + m_satState.q.rotateInverse(muzzleBody);
+    m_boresightECI=m_satState.q.rotateInverse({0,0,1}).normalized();
+    const auto desired=(m_targetPosECI-m_muzzlePosECI).normalized();
+    m_slewErrorDeg=std::acos(std::clamp(m_boresightECI.dot(desired),-1.0,1.0))*180.0/3.141592653589793;
 
     aero::math::Vec3 rho = m_satPosECI - m_targetPosECI;
     m_slantRangeKm = rho.norm() / KM_TO_3D;
@@ -470,7 +477,7 @@ void ADCSView::computeLineOfSight() {
     m_elevationDeg = std::asin(std::max(-1.0, std::min(1.0, sinElev))) * (180.0 / 3.14159265358979323846);
     m_isTargetVisible = (m_elevationDeg >= m_elevationMask);
 
-    aero::math::Vec3 sunDir = aero::math::Vec3(150, 40, 80).normalized();
+    const auto sunDir = solarEnvironment(m_replayActive?m_currentOrbit.utc:m_skyEpochUtc+m_simTimeSec).direction;
     double satProjSun = m_satPosECI.dot(sunDir);
     m_isSatSunlit = true;
     if (satProjSun < 0.0) {
@@ -572,12 +579,8 @@ void ADCSView::advancePhysics(double dt) {
     m_mekf.predict(m_satState.omega + m_trueGyroBias + (m_sensorNoise?m_biasWalk:aero::math::Vec3{})+gyroNoise, dt);
     m_mekf.updateVector((m_satState.q.rotate(aero::math::Vec3(0, 0, 1))+vectorNoise).normalized(), aero::math::Vec3(0, 0, 1), m_vectorNoise);
 
-    // Attitude error
-    aero::adcs::Quaternion qErr = qTarget.inverse() * m_satState.q;
-    if (qErr.w < 0.0) {
-        qErr = aero::adcs::Quaternion(-qErr.w, -qErr.x, -qErr.y, -qErr.z);
-    }
-    m_slewErrorDeg = 2.0 * std::acos(std::clamp(std::abs(qErr.w), -1.0, 1.0)) * (180.0 / 3.14159265);
+    // Refresh the aperture and measured boresight after attitude integration
+    computeLineOfSight();
     m_bodyRateNormDegS = m_satState.omega.norm() * (180.0 / 3.14159265);
     m_pointingSettledSec=m_slewErrorDeg<0.25 && m_bodyRateNormDegS<0.5?m_pointingSettledSec+dt:0;
     const double etaRate=m_realScale&&!m_quickReposition?slewRateDeg:5.0;
@@ -634,8 +637,6 @@ void ADCSView::render3D(int width, int height) {
     glViewport(0, 0, width, height);
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
-    m_shader3D.use();m_shader3D.setInt("uLocalDepth",0);
-    m_lineShader.use();m_lineShader.setInt("uLocalDepth",0);
 
     float aspect = (float)width / (float)(height > 0 ? height : 1);
     Mat4 proj = Mat4::perspective(m_cameraFov * (3.14159265f / 180.0f), aspect, 0.1f, 1000.0f);
@@ -643,6 +644,8 @@ void ADCSView::render3D(int width, int height) {
     aero::math::Vec3 camEye;
     aero::math::Vec3 camTarget;
     aero::math::Vec3 camUp(0, 1, 0);
+    const double skyTime=m_replayActive?m_currentOrbit.utc:m_skyEpochUtc+m_simTimeSec;
+    const auto solar=solarEnvironment(skyTime);
 
     // Compute Camera Vectors for all 9 perspectives
     if (m_camPreset == CameraPreset::FreeFlycam) {
@@ -669,10 +672,8 @@ void ADCSView::render3D(int width, int height) {
         camUp = m_satState.q.rotateInverse(aero::math::Vec3(0, 1, 0));
     } else if (m_camPreset == CameraPreset::TelescopeLookdown) {
         camEye = m_muzzlePosECI;
-        camTarget = m_targetPosECI;
-        aero::math::Vec3 los = (m_targetPosECI - m_satPosECI).normalized();
-        aero::math::Vec3 right = los.cross(aero::math::Vec3(0, 1, 0)).normalized();
-        camUp = right.cross(los).normalized();
+        camTarget = camEye + m_boresightECI;
+        camUp = m_satState.q.rotateInverse({0,1,0});
     } else if (m_camPreset == CameraPreset::NadirEarth) {
         camEye = m_satPosECI + m_satState.q.rotateInverse(aero::math::Vec3(0, 1.2, 0) * (spacecraftScale() * modelFramingScale()));
         camTarget = aero::math::Vec3(0, 0, 0);
@@ -692,7 +693,7 @@ void ADCSView::render3D(int width, int height) {
         camTarget = aero::math::Vec3(0, 0, 0);
         camUp = aero::math::Vec3(0, std::sin(inc), std::cos(inc));
     } else { // SunEarthEcliptic
-        camEye = aero::math::Vec3(150, 40, 80).normalized() * 58.0;
+        camEye = solar.direction * 58.0;
         camTarget = aero::math::Vec3(0, 0, 0);
         camUp = aero::math::Vec3(0, 1, 0);
     }
@@ -702,7 +703,14 @@ void ADCSView::render3D(int width, int height) {
     if (std::abs(m_cameraForward.dot(camUp.normalized())) > 0.999)
         camUp = std::abs(m_cameraForward[1]) < 0.9 ? aero::math::Vec3(0,1,0) : aero::math::Vec3(1,0,0);
     m_cameraUp = m_cameraForward.cross(camUp).normalized().cross(m_cameraForward).normalized();
-    // World units are ~531 km: a fixed 0.1 near plane cut away nearby Earth.
+    // The globe is opaque. Below the surface, clear the entire 3D scene
+    // rather than viewing the back of the textured sphere.
+    if(camEye.norm()<EARTH_RADIUS_3D) {
+        glClearColor(0.015f,0.020f,0.029f,1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        return;
+    }
+    // Keep the near plane close enough to preserve the surface on approach
     const float nearEarth = float(std::clamp((camEye.norm()-EARTH_RADIUS_3D)*0.05, 1e-6, 0.1));
     proj = Mat4::perspective(m_cameraFov * 3.14159265f / 180.0f, aspect, nearEarth,
         float(std::max(1000.0, camEye.norm()+2*EARTH_RADIUS_3D)));
@@ -714,10 +722,29 @@ void ADCSView::render3D(int width, int height) {
     m_sky.draw(Mat4::multiply(proj, Mat4::lookAt(aero::math::Vec3::zero(),
         m_cameraForward, m_cameraUp)), width, height, m_skySettings);
 
+    const auto sun=solar.direction;
+    const auto right=m_cameraForward.cross(m_cameraUp).normalized();
+    glDisable(GL_DEPTH_TEST);glDepthMask(GL_FALSE);
+    glEnable(GL_BLEND);glBlendFunc(GL_ONE,GL_ONE);
+    m_sunShader.use();
+    m_sunShader.setVec3("uForward",float(m_cameraForward.x),float(m_cameraForward.y),float(m_cameraForward.z));
+    m_sunShader.setVec3("uRight",float(right.x),float(right.y),float(right.z));
+    m_sunShader.setVec3("uUp",float(m_cameraUp.x),float(m_cameraUp.y),float(m_cameraUp.z));
+    m_sunShader.setVec3("uSunDir",float(sun.x),float(sun.y),float(sun.z));
+    m_sunShader.setVec3("uEye",float(camEye.x),float(camEye.y),float(camEye.z));
+    m_sunShader.setFloat("uTanHalfFov",std::tan(m_cameraFov*3.14159265f/360));
+    m_sunShader.setFloat("uAspect",aspect);
+    m_sunShader.setFloat("uRadius",float(solar.angularRadius));
+    m_sunShader.setFloat("uGlare",m_sunGlare);
+    glBindVertexArray(m_lineVao);glDrawArrays(GL_TRIANGLES,0,3);glBindVertexArray(0);
+    glDisable(GL_BLEND);glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+    glDepthMask(GL_TRUE);glEnable(GL_DEPTH_TEST);
+
     // 1. Earth Sphere
     m_shader3D.use();
     m_shader3D.setFloat("uRoughness",0.5f);
-    m_shader3D.setVec3("uSunDir", 150.0f, 40.0f, 80.0f);
+    m_shader3D.setVec3("uSunDir", float(sun.x),float(sun.y),float(sun.z));
+    m_shader3D.setFloat("uSunlight",1.0f);
     m_shader3D.setVec3("uViewPos", (float)camEye[0], (float)camEye[1], (float)camEye[2]);
 
     Mat4 earthModel = Mat4::rotateY((float)m_earthSpinAngleRad);
@@ -728,6 +755,8 @@ void ADCSView::render3D(int width, int height) {
     m_shader3D.setInt("uTexture", 0);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, m_earthTexId);
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
     m_earthMesh.draw();
 
     // Integrate atmospheric density along the view and sunlight rays.
@@ -739,7 +768,7 @@ void ADCSView::render3D(int width, int height) {
     glCullFace(GL_FRONT); // draw the far shell once, including from inside the atmosphere
     m_atmosphereShader.use();
     m_atmosphereShader.setVec3("uViewPos", (float)camEye[0], (float)camEye[1], (float)camEye[2]);
-    m_atmosphereShader.setVec3("uSunDir", 150, 40, 80);
+    m_atmosphereShader.setVec3("uSunDir", float(sun.x),float(sun.y),float(sun.z));
     Mat4 shell = Mat4::scale(1.02f, 1.02f, 1.02f);
     m_atmosphereShader.setMat4("uModel", shell);
     m_atmosphereShader.setMat4("uMVP", Mat4::multiply(viewProj, shell));
@@ -765,6 +794,9 @@ void ADCSView::render3D(int width, int height) {
     m_shader3D.setVec4("uColor", 0.94f, 0.27f, 0.27f, 1.0f);
     if (!m_realScale) m_beaconMesh.draw();
 
+    // The virtual sensor view excludes its own spacecraft housing
+    if(m_camPreset==CameraPreset::TelescopeLookdown)return;
+
     // The close satellite pass uses meters centered on the satellite. This avoids
     // losing meter-scale detail in float matrices at planetary distances.
     if (m_realScale) {
@@ -778,13 +810,12 @@ void ADCSView::render3D(int width, int height) {
         const float nearSatellite=float(std::clamp(nearest*.8,.001,1.0e8));
         viewProj = Mat4::multiply(Mat4::perspective(m_cameraFov * 3.14159265f / 180.0f, aspect, nearSatellite, 1.0e10f), localView);
         glClear(GL_DEPTH_BUFFER_BIT);
-        m_lineShader.use();m_lineShader.setInt("uLocalDepth",1);
-        m_shader3D.use();m_shader3D.setInt("uLocalDepth",1);
         m_shader3D.setVec3("uViewPos", float(localEye[0]), float(localEye[1]), float(localEye[2]));
     }
 
+    m_shader3D.setFloat("uSunlight",m_isSatSunlit?1.0f:0.0f);
     // 3. Spacecraft Model
-    Mat4 satRot = Mat4::fromQuaternion(m_satState.q.conjugate());
+    Mat4 satRot = spacecraftRotation();
     Mat4 satTrans = Mat4::translate((float)m_satPosECI[0], (float)m_satPosECI[1], (float)m_satPosECI[2]);
     Mat4 satModel = m_realScale ? satRot : Mat4::multiply(satTrans, satRot);
 
@@ -833,15 +864,16 @@ void ADCSView::render3D(int width, int height) {
     m_lineShader.use();
     m_lineShader.setMat4("uMVP", viewProj);
 
+    const auto beamEnd=m_muzzlePosECI+m_boresightECI*(m_targetPosECI-m_muzzlePosECI).norm();
     float lineVerts[6] = {
         (float)m_muzzlePosECI[0], (float)m_muzzlePosECI[1], (float)m_muzzlePosECI[2],
-        (float)m_targetPosECI[0], (float)m_targetPosECI[1], (float)m_targetPosECI[2]
+        (float)beamEnd[0], (float)beamEnd[1], (float)beamEnd[2]
     };
 
     glBindBuffer(GL_ARRAY_BUFFER, m_lineVbo);
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(lineVerts), lineVerts);
 
-    if (m_isTargetVisible) {
+    if (m_isTargetVisible && m_slewErrorDeg<0.5) {
         m_lineShader.setVec4("uColor", 0.06f, 0.73f, 0.51f, 0.95f); // Green
     } else {
         m_lineShader.setVec4("uColor", 0.94f, 0.27f, 0.27f, 0.85f); // Red
@@ -954,9 +986,9 @@ layout(location=0) in vec3 p; layout(location=1) in float heat;
 uniform mat4 uMVP; uniform float uSize; out float glow;
 void main(){gl_Position=uMVP*vec4(p,1);gl_PointSize=clamp(uSize/max(gl_Position.w,.01),2,100);glow=heat;})";
         const char* fs=R"(#version 330 core
-in float glow; out vec4 color; uniform bool uLocalDepth;
+in float glow; out vec4 color;
 void main(){float r=length(gl_PointCoord-vec2(.5))*2;if(r>1)discard;
-gl_FragDepth=uLocalDepth?log2(1.0+1.0/gl_FragCoord.w)/log2(1.0+1.0e10):gl_FragCoord.z;
+gl_FragDepth=log2(1.0+1.0/gl_FragCoord.w)/log2(1.0+1.0e10);
 color=vec4(mix(vec3(1,.12,.01),vec3(1,.8,.35),glow),pow(1-r,2)*.6*glow);})";
         if(!m_entryShader.loadFromSource(vs,fs))return;
         glGenVertexArrays(1,&m_entryVao);glGenBuffers(1,&m_entryVbo);
@@ -980,7 +1012,6 @@ color=vec4(mix(vec3(1,.12,.01),vec3(1,.8,.35),glow),pow(1-r,2)*.6*glow);})";
         }
     }
     m_entryShader.use();m_entryShader.setMat4("uMVP",Mat4::multiply(viewProj,satModel));
-    m_entryShader.setInt("uLocalDepth",m_realScale);
     m_entryShader.setFloat("uSize",float(height*radius*.10*(!m_realScale?overviewModelScale():1)));
     glBindVertexArray(m_entryVao);glBindBuffer(GL_ARRAY_BUFFER,m_entryVbo);
     glBufferData(GL_ARRAY_BUFFER,particles.size()*sizeof(float),particles.data(),GL_STREAM_DRAW);
@@ -1048,7 +1079,7 @@ void ADCSView::drawResearchAndTrail(const Mat4& vp,int width,int height,bool clo
     if(!m_showTrail || m_trail.size()<1 || (m_realScale!=closePass))return;
     if(!m_historyVao) {
         if(!m_ribbonShader.loadFromSource("#version 330 core\nlayout(location=0)in vec4 clip;void main(){gl_Position=clip;}",
-            "#version 330 core\nout vec4 color;uniform bool uLocalDepth;void main(){gl_FragDepth=uLocalDepth?log2(1.0+1.0/gl_FragCoord.w)/log2(1.0+1.0e10):gl_FragCoord.z;color=vec4(.55,1,.65,1);}"))return;
+            "#version 330 core\nout vec4 color;void main(){gl_FragDepth=log2(1.0+1.0/gl_FragCoord.w)/log2(1.0+1.0e10);color=vec4(.55,1,.65,1);}"))return;
         glGenVertexArrays(1,&m_historyVao);glGenBuffers(1,&m_historyVbo);
         glBindVertexArray(m_historyVao);glBindBuffer(GL_ARRAY_BUFFER,m_historyVbo);
         glEnableVertexAttribArray(0);glVertexAttribPointer(0,4,GL_FLOAT,GL_FALSE,4*sizeof(float),nullptr);
@@ -1073,7 +1104,6 @@ void ADCSView::drawResearchAndTrail(const Mat4& vp,int width,int height,bool clo
     for(size_t i=1;i<m_trail.size();++i)if(!m_trail[i].start)segment(m_trail[i-1].position,m_trail[i].position);
     segment(m_trail.back().position,m_satPosECI);
     m_ribbonShader.use();glBindVertexArray(m_historyVao);glBindBuffer(GL_ARRAY_BUFFER,m_historyVbo);
-    m_ribbonShader.setInt("uLocalDepth",closePass);
     glBufferData(GL_ARRAY_BUFFER,vertices.size()*sizeof(float),vertices.data(),GL_STREAM_DRAW);
     glDrawArrays(GL_TRIANGLES,0,GLsizei(vertices.size()/4));glBindVertexArray(0);
 }
@@ -1127,9 +1157,12 @@ void ADCSView::drawSettings() {
         if (m_selectedModel >= 2) ImGui::TextDisabled(m_selectedModel==3?"Model: NASA / Christian A. Lopez":"Model: NASA");
         if (m_landsatModel.parts.empty()) ImGui::TextWrapped("Landsat 8 model could not be loaded.");
         ImGui::Separator();
-        bool realScale = m_realScale;
-        if (ImGui::Checkbox("1:1 physical scale & real time", &realScale)) setRealScale(realScale);
-        explain("Earth and orbit retain their physical dimensions. The selected spacecraft uses meter-scale geometry. One real second advances one simulation second.");
+        int environmentMode=m_realScale?0:1;
+        if(ImGui::Combo("Environment mode",&environmentMode,"1:1 mode\0Mini mode\0"))setRealScale(environmentMode==0);
+        explain("1:1 is the default with physical spacecraft scale and real time — Mini keeps the enlarged spacecraft and accelerated overview");
+        sliderFloatExact("Sun glare",&m_sunGlare,0.0f,2.0f,"%.2fx","%.2f");
+        explain("Soft optical glare around the Sun — zero leaves the physical solar disc visible");
+        ImGui::TextWrapped(m_selectedModel==0?"Targeting uses the telescope aperture and body +Z boresight":"Simulated body +Z targeting — this model has no verified instrument mount or gimbal calibration");
         ImGui::TextWrapped(m_selectedModel == 0
             ? "Earth radius: 6,378 km. Satellite bus: 0.7 x 0.7 x 1.2 m; wingspan: about 4.2 m."
             : "Earth radius: 6,378 km. Detailed spacecraft use meter-scale geometry; Terra's source units are calibrated to its 6.8 m bus. Model selection does not change mass, inertia or orbital elements.");
@@ -1263,10 +1296,17 @@ void ADCSView::drawSettings() {
     ImGui::End();
 }
 void ADCSView::drawFlightOverlay() {
-    if (!m_realScale || !m_hudVisible) return;
+    if (!m_hudVisible || m_fullscreenMap) return;
     const auto display = ImGui::GetIO().DisplaySize;
     if (display.x < 100 || display.y < 100) return;
     auto* draw = ImGui::GetBackgroundDrawList();
+    if(m_cameraEye.norm()<EARTH_RADIUS_3D) {
+        constexpr const char* message="Camera below Earth's surface";
+        const auto size=ImGui::CalcTextSize(message);
+        draw->AddText(ImVec2((display.x-size.x)*0.5f,display.y*0.44f),IM_COL32(210,225,238,255),message);
+        return;
+    }
+    if (!m_realScale) return;
     const auto delta = m_satPosECI - m_cameraEye;
     const auto right = m_cameraForward.cross(m_cameraUp);
     double x = delta.dot(right), y = delta.dot(m_cameraUp), z = delta.dot(m_cameraForward);
@@ -1305,6 +1345,10 @@ void ADCSView::drawFlightOverlay() {
 }
 
 void ADCSView::drawUI(bool allPanels) {
+    if(m_fullscreenMap) {
+        draw2DWorldMap();
+        return;
+    }
     beginPanelSidebar("Orbital panels",6);
     panelToggle("Telemetry",PanelIcon::Telemetry,m_panelVisible[0]);
     panelToggle("Live charts",PanelIcon::Charts,m_panelVisible[1]);
@@ -1409,7 +1453,7 @@ void ADCSView::drawTelemetryHUD() {
 
     ImGui::Separator();
     ImGui::Text("Slew Error:     %.2f°", m_slewErrorDeg);
-    explain("Angular separation between the telescope boresight and the commanded target direction. Below 0.5 degrees the target is considered locked.");
+    explain("Measured boresight error from the payload origin — alignment below 0.5 degrees only counts when the ground target is visible");
     ImGui::Text("Angular Rate:   %.3f °/s", m_bodyRateNormDegS);
     explain("Magnitude of spacecraft rotation about all three body axes, in degrees per second.");
     ImGui::Text("MEKF Covariance: 3-sigma %.3f deg",
@@ -1633,50 +1677,151 @@ void ADCSView::drawControlPanel() {
 }
 
 void ADCSView::draw2DWorldMap() {
-    beginEdgePanel("2D Ground Track (ECEF)", 3, 0, &m_panelVisible[3]);
-
-    ImDrawList* drawList = ImGui::GetWindowDrawList();
-    ImVec2 p0 = ImGui::GetCursorScreenPos();
-    float mapWidth = std::max(40.0f, ImGui::GetContentRegionAvail().x);
-    ImVec2 mapSize(mapWidth, mapWidth * 0.5f);
-
-    drawList->AddRectFilled(p0, ImVec2(p0.x + mapSize.x, p0.y + mapSize.y), IM_COL32(6, 12, 24, 255));
-    drawList->AddRect(p0, ImVec2(p0.x + mapSize.x, p0.y + mapSize.y), IM_COL32(56, 189, 248, 100));
-
-    if (m_groundTrack2D.size() > 1) {
-        for (size_t i = 0; i < m_groundTrack2D.size() - 1; ++i) {
-            auto& pt1 = m_groundTrack2D[i];
-            auto& pt2 = m_groundTrack2D[i+1];
-            if (std::abs(pt1.lon - pt2.lon) < 160.0f) {
-                float x1 = p0.x + ((pt1.lon + 180.0f) / 360.0f) * mapSize.x;
-                float y1 = p0.y + ((90.0f - pt1.lat) / 180.0f) * mapSize.y;
-                float x2 = p0.x + ((pt2.lon + 180.0f) / 360.0f) * mapSize.x;
-                float y2 = p0.y + ((90.0f - pt2.lat) / 180.0f) * mapSize.y;
-                drawList->AddLine(ImVec2(x1, y1), ImVec2(x2, y2), IM_COL32(56, 189, 248, 120), 1.5f);
-            }
+    const bool interactive=m_fullscreenMap;
+    if(interactive) {
+        const auto* viewport=ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(viewport->Pos);
+        ImGui::SetNextWindowSize(viewport->Size);
+        ImGui::SetNextWindowFocus();
+        ImGui::Begin("Earth-fixed map##fullscreen",nullptr,
+            ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings|
+            ImGuiWindowFlags_NoScrollbar|ImGuiWindowFlags_NoScrollWithMouse);
+        if(ImGui::Button("Exit fullscreen") || ImGui::IsKeyPressed(ImGuiKey_Escape))m_fullscreenMap=false;
+        ImGui::SameLine();
+        if(ImGui::Button("Reset view")) {
+            m_mapZoom=1;
+            m_mapPanX=m_mapPanY=0;
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("Drag to pan   Scroll to zoom   Click to pin details");
+    } else {
+        beginEdgePanel("2D Ground Track (ECEF)",3,0,&m_panelVisible[3]);
+        if(ImGui::Button("Fullscreen map")) {
+            m_fullscreenMap=true;
+            ImGui::End();
+            return;
         }
     }
-
-    float tgtX = p0.x + (float)((m_targetLonDeg + 180.0) / 360.0) * mapSize.x;
-    float tgtY = p0.y + (float)((90.0 - m_targetLatDeg) / 180.0) * mapSize.y;
-    drawList->AddCircleFilled(ImVec2(tgtX, tgtY), 4.5f, IM_COL32(239, 68, 68, 255));
-    drawList->AddCircle(ImVec2(tgtX, tgtY), 8.0f, IM_COL32(239, 68, 68, 180), 0, 1.5f);
-
-    if (!m_groundTrack2D.empty()) {
-        auto& sat = m_groundTrack2D.back();
-        float satX = p0.x + ((sat.lon + 180.0f) / 360.0f) * mapSize.x;
-        float satY = p0.y + ((90.0f - sat.lat) / 180.0f) * mapSize.y;
-        drawList->AddCircleFilled(ImVec2(satX, satY), 5.0f, IM_COL32(56, 189, 248, 255));
-
-        ImU32 lineColor = m_isTargetVisible ? IM_COL32(16, 185, 129, 150) : IM_COL32(239, 68, 68, 150);
-        drawList->AddLine(ImVec2(satX, satY), ImVec2(tgtX, tgtY), lineColor, 1.2f);
+    const auto available=ImGui::GetContentRegionAvail();
+    const float width=std::max(1.0f,available.x);
+    const float detailHeight=ImGui::GetTextLineHeightWithSpacing()*4;
+    const float height=interactive?std::max(1.0f,available.y-detailHeight):width*.5f;
+    const ImVec2 top=ImGui::GetCursorScreenPos(), bottom(top.x+width,top.y+height);
+    const ImVec2 center((top.x+bottom.x)*.5f,(top.y+bottom.y)*.5f);
+    const float baseWidth=std::min(width,height*2);
+    const auto& io=ImGui::GetIO();
+    ImGui::InvisibleButton("Map canvas",ImVec2(width,height));
+    const bool hovered=ImGui::IsItemHovered();
+    if(interactive) {
+        if(ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+            m_mapPanX+=io.MouseDelta.x;
+            m_mapPanY+=io.MouseDelta.y;
+        }
+        if(hovered && io.MouseWheel!=0) {
+            const float zoom=std::clamp(m_mapZoom*std::pow(1.25f,io.MouseWheel),1.0f,32.0f);
+            const float ratio=zoom/m_mapZoom;
+            m_mapPanX=(m_mapPanX+center.x-io.MousePos.x)*ratio+io.MousePos.x-center.x;
+            m_mapPanY=(m_mapPanY+center.y-io.MousePos.y)*ratio+io.MousePos.y-center.y;
+            m_mapZoom=zoom;
+        }
+        const float limitX=std::max(0.0f,(baseWidth*m_mapZoom-width)*.5f);
+        const float limitY=std::max(0.0f,(baseWidth*m_mapZoom*.5f-height)*.5f);
+        m_mapPanX=std::clamp(m_mapPanX,-limitX,limitX);
+        m_mapPanY=std::clamp(m_mapPanY,-limitY,limitY);
     }
+    const float mapWidth=baseWidth*(interactive?m_mapZoom:1.0f), mapHeight=mapWidth*.5f;
+    const ImVec2 origin(center.x-mapWidth*.5f+(interactive?m_mapPanX:0.0f),
+        center.y-mapHeight*.5f+(interactive?m_mapPanY:0.0f));
+    const ImVec2 end(origin.x+mapWidth,origin.y+mapHeight);
+    auto mapPoint=[&](double latitude,double longitude) {
+        return ImVec2(origin.x+float((longitude+180)/360)*mapWidth,
+            origin.y+float((90-latitude)/180)*mapHeight);
+    };
+    auto* draw=ImGui::GetWindowDrawList();
+    draw->PushClipRect(top,bottom,true);
+    draw->AddRectFilled(top,bottom,IM_COL32(6,12,24,255));
+    if(m_earthTexId)draw->AddImage((ImTextureID)(intptr_t)m_earthTexId,origin,end,
+        ImVec2(0,0),ImVec2(1,1),IM_COL32(200,210,225,255));
+    draw->AddRect(origin,end,IM_COL32(56,189,248,100));
+    draw->PushClipRect(origin,end,true);
 
-    ImGui::Dummy(mapSize);
-    ImGui::TextWrapped("Ground track: satellite path and selected target %s. Target is %s.", m_targetName.c_str(), m_isTargetVisible ? "above the horizon" : "blocked by Earth");
-    if (!m_groundTrack2D.empty()) ImGui::TextWrapped("Satellite latitude %.2f, longitude %.2f degrees.", m_groundTrack2D.back().lat, m_groundTrack2D.back().lon);
-    ImGui::TextWrapped("Target latitude %.2f, longitude %.2f degrees.", m_targetLatDeg, m_targetLonDeg);
-    explain("Earth-fixed ground track: cyan is the satellite and its recent path; red is the selected target. The connecting line indicates visibility. Longitude runs left to right, latitude top to bottom.");
+    enum { Satellite=1, Station, GroundTrack, StationLink };
+    int hit=0;
+    float closest=8.0f;
+    auto testLine=[&](ImVec2 a,ImVec2 b,int feature) {
+        if(!hovered || io.MousePos.x<origin.x || io.MousePos.x>end.x
+            || io.MousePos.y<origin.y || io.MousePos.y>end.y)return;
+        const float dx=b.x-a.x, dy=b.y-a.y;
+        const float length2=dx*dx+dy*dy;
+        const float along=length2>0?std::clamp(((io.MousePos.x-a.x)*dx+(io.MousePos.y-a.y)*dy)/length2,0.0f,1.0f):0.0f;
+        const float distance=std::hypot(io.MousePos.x-a.x-along*dx,io.MousePos.y-a.y-along*dy);
+        if(distance<=closest){closest=distance;hit=feature;}
+    };
+    auto drawSegment=[&](ImVec2 a,ImVec2 b,ImU32 color,int feature) {
+        if(std::abs(a.x-b.x)>mapWidth*.5f) {
+            if(a.x>b.x)std::swap(a,b);
+            a.x+=mapWidth;
+            draw->AddLine(a,b,color,1.6f);
+            testLine(a,b,feature);
+            a.x-=mapWidth;
+            b.x-=mapWidth;
+        }
+        draw->AddLine(a,b,color,1.6f);
+        testLine(a,b,feature);
+    };
+    for(size_t i=1;i<m_groundTrack2D.size();++i) {
+        const auto& a=m_groundTrack2D[i-1];
+        const auto& b=m_groundTrack2D[i];
+        drawSegment(mapPoint(a.lat,a.lon),mapPoint(b.lat,b.lon),IM_COL32(90,210,255,200),GroundTrack);
+    }
+    const double spin=m_earthSpinAngleRad;
+    const double x=m_satPosECI.x*std::cos(spin)-m_satPosECI.z*std::sin(spin);
+    const double z=m_satPosECI.x*std::sin(spin)+m_satPosECI.z*std::cos(spin);
+    constexpr double degrees=180.0/3.141592653589793;
+    const double latitude=std::atan2(m_satPosECI.y,std::hypot(x,z))*degrees;
+    const double longitude=std::atan2(-z,x)*degrees;
+    const auto satellite=mapPoint(latitude,longitude);
+    const auto station=mapPoint(m_targetLatDeg,m_targetLonDeg);
+    const ImU32 linkColor=m_isTargetVisible?IM_COL32(75,245,165,225):IM_COL32(255,110,105,220);
+    drawSegment(satellite,station,linkColor,StationLink);
+    auto marker=[&](ImVec2 point,ImU32 color,int feature) {
+        draw->AddCircleFilled(point,7,IM_COL32(4,10,16,240));
+        draw->AddCircleFilled(point,5,color);
+        if(hovered && std::hypot(io.MousePos.x-point.x,io.MousePos.y-point.y)<=9)hit=feature;
+    };
+    marker(station,IM_COL32(255,95,95,255),Station);
+    marker(satellite,IM_COL32(100,220,255,255),Satellite);
+    draw->PopClipRect();
+    draw->PopClipRect();
+
+    if(interactive && hovered && ImGui::IsMouseReleased(ImGuiMouseButton_Left)
+        && !ImGui::IsMouseDragPastThreshold(ImGuiMouseButton_Left))m_mapSelection=hit;
+    auto details=[&](int feature) {
+        switch(feature) {
+        case Satellite:
+            ImGui::TextUnformatted("Simulated spacecraft");
+            ImGui::Text("Latitude %.2f°   Longitude %.2f°",latitude,longitude);
+            ImGui::Text("Altitude %.1f km",satelliteAltitudeKm());
+            break;
+        case Station:
+            ImGui::TextUnformatted(m_targetName.c_str());
+            ImGui::Text("Latitude %.2f°   Longitude %.2f°",m_targetLatDeg,m_targetLonDeg);
+            ImGui::Text("Satellite elevation %.1f°",m_elevationDeg);
+            break;
+        case GroundTrack:
+            ImGui::TextUnformatted("Recent spacecraft ground track");
+            ImGui::TextUnformatted("Path of the point directly beneath the spacecraft");
+            break;
+        case StationLink:
+            ImGui::TextUnformatted(m_isTargetVisible?"Above the station's elevation mask":"Below the station's elevation mask");
+            ImGui::Text("Range %.1f km   Elevation %.1f°",m_slantRangeKm,m_elevationDeg);
+            break;
+        }
+    };
+    if(hit && ImGui::BeginTooltip()){details(hit);ImGui::EndTooltip();}
+    if(!m_earthTexId)ImGui::TextDisabled("Earth map texture unavailable");
+    if(interactive && m_mapSelection)details(m_mapSelection);
+    if(!interactive)ImGui::TextWrapped("Selected station   %s",m_targetName.c_str());
     ImGui::End();
 }
 
@@ -1711,6 +1856,7 @@ void ADCSView::cleanup() {
     if(m_historyVbo) glDeleteBuffers(1,&m_historyVbo);
     m_historyVao=m_historyVbo=0;
     m_atmosphereShader.cleanup();
+    m_sunShader.cleanup();
     m_landsatModel.cleanup();
     for(auto& model:m_additionalModels)model.cleanup();
     m_earthMesh.cleanup();

@@ -9,6 +9,7 @@
 namespace gui {
 struct ConsoleChecks {
     static bool commands(DeveloperConsole& console,MusicPlayer& player,ADCSView& view,DisplaySettings& display){
+        view.setRealScale(false);
         const auto run=[&](const char* text){console.execute(player,view,display,text);};
         run("hud.spacecraft_marker 0.37");if(view.m_markerOpacity!=.37f)return false;
         run("hud.spacecraft_marker nan");run("hud.spacecraft_marker -1");run("hud.spacecraft_marker 2");
